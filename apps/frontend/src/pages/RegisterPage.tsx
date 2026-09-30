@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { GoogleAccountModal } from '../components/GoogleAccountModal.js';
 import { GoogleCompleteModal } from '../components/GoogleCompleteModal.js';
+import { initiateGoogleAuth } from '../services/googleAuth.js';
 import {
   User,
   Mail,
@@ -161,6 +162,15 @@ export const RegisterPage: React.FC = () => {
     }
   };
 
+  const handleGoogleClick = () => {
+    setError(null);
+    initiateGoogleAuth({
+      onSuccess: handleSelectGoogleAccount,
+      onError: (err) => setError(err),
+      onFallback: () => setGoogleAccountModalOpen(true),
+    });
+  };
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-10">
@@ -200,7 +210,7 @@ export const RegisterPage: React.FC = () => {
         <div className="mb-8">
           <button
             type="button"
-            onClick={() => setGoogleAccountModalOpen(true)}
+            onClick={handleGoogleClick}
             className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold rounded-2xl text-sm shadow-xs transition-all flex items-center justify-center gap-3 cursor-pointer hover:border-slate-400"
           >
             {/* Google Icon SVG */}

@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { GoogleAccountModal } from '../components/GoogleAccountModal.js';
 import { GoogleCompleteModal } from '../components/GoogleCompleteModal.js';
+import { initiateGoogleAuth } from '../services/googleAuth.js';
 import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
@@ -83,6 +84,15 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const handleGoogleClick = () => {
+    setError(null);
+    initiateGoogleAuth({
+      onSuccess: handleSelectGoogleAccount,
+      onError: (err) => setError(err),
+      onFallback: () => setGoogleAccountModalOpen(true),
+    });
+  };
+
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-slate-200 p-8 sm:p-10">
@@ -107,7 +117,7 @@ export const LoginPage: React.FC = () => {
         <div className="mb-6">
           <button
             type="button"
-            onClick={() => setGoogleAccountModalOpen(true)}
+            onClick={handleGoogleClick}
             className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold rounded-2xl text-sm shadow-xs transition-all flex items-center justify-center gap-3 cursor-pointer hover:border-slate-400"
           >
             {/* Google Icon SVG */}

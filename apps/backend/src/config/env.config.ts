@@ -5,6 +5,7 @@ export const ENV = {
   PORT: Number(process.env.PORT || 4000),
   NODE_ENV: process.env.NODE_ENV || 'development',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '224545960658-khrdouahso3ql8pia7ukrhbhabbc3is8.apps.googleusercontent.com',
 
   MONGO_URI: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/elearning_gdqpan?directConnection=true',
 
