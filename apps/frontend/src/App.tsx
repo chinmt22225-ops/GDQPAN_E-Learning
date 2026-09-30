@@ -73,7 +73,7 @@ const HomePage: React.FC = () => {
             </p>
           </div>
           <Link
-            to={user?.role === 'admin' ? '/admin/dashboard' : '/login'}
+            to={user?.role === 'admin' ? '/admin/dashboard' : '/admin/login'}
             className="inline-flex items-center justify-center w-full px-5 py-3.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors gap-2"
           >
             <span>{user?.role === 'admin' ? 'Vào bảng điều khiển' : 'Đăng nhập Quản trị'}</span>

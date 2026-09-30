@@ -1,19 +1,29 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { GoogleAccountModal } from '../components/GoogleAccountModal.js';
 import { GoogleCompleteModal } from '../components/GoogleCompleteModal.js';
 import { initiateGoogleAuth } from '../services/googleAuth.js';
-import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight, AlertCircle, Mail } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
+  const location = useLocation();
+  const isAdminMode = location.pathname.includes('/admin');
+
   const [identifier, setIdentifier] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const { login, refreshUser } = useAuth();
   const navigate = useNavigate();
+
+  // Reset form khi chuyển đổi giữa chế độ Sinh viên và Quản trị
+  useEffect(() => {
+    setError(null);
+    setIdentifier('');
+    setPassword('');
+  }, [isAdminMode]);
 
   // Trạng thái đăng nhập Google
   const [googleAccountModalOpen, setGoogleAccountModalOpen] = useState(false);
@@ -24,7 +34,7 @@ export const LoginPage: React.FC = () => {
     googleId: string;
   } | null>(null);
 
-  // Đăng nhập trực tiếp bằng MSSV / SĐT + Mật khẩu
+  // Đăng nhập trực tiếp bằng Mật khẩu
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier || !password) {
@@ -37,6 +47,13 @@ export const LoginPage: React.FC = () => {
 
     try {
       const user = await login(identifier, password);
+
+      // Nếu đang ở cổng Quản trị mà tài khoản không phải Admin
+      if (isAdminMode && user.role !== 'admin') {
+        setError('Tài khoản này là tài khoản học viên. Vui lòng đăng nhập tại Cổng Học Viên.');
+        return;
+      }
+
       if (user.role === 'admin') {
         navigate('/admin/dashboard');
       } else {
@@ -49,7 +66,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // Bước 1: Khi học sinh chọn một tài khoản Google
+  // Bước 1: Khi người dùng chọn một tài khoản Google
   const handleSelectGoogleAccount = async (account: {
     email: string;
     name: string;
@@ -62,7 +79,7 @@ export const LoginPage: React.FC = () => {
       // Gọi backend kiểm tra tài khoản Google
       const res = await apiRequest<{
         isNewUser?: boolean;
-        user?: any;
+        user?: { role?: string };
         email?: string;
         name?: string;
         googleId?: string;
@@ -75,17 +92,37 @@ export const LoginPage: React.FC = () => {
         }),
       });
 
-      // Kiểm tra rõ ràng cờ isNewUser (tài khoản chưa từng hoàn tất đăng ký)
+      // Kiểm tra rõ ràng cờ isNewUser (tài khoản chưa từng đăng ký)
       const isNew = res.isNewUser === true || res.data?.isNewUser === true;
 
-      // Nếu tài khoản Google đã có trong hệ thống và không phải tài khoản mới -> Đăng nhập thành công ngay
+      // Nếu tài khoản Google đã có trong hệ thống và không phải tài khoản mới
       if (res.success && !isNew) {
         await refreshUser();
-        navigate('/courses');
+        if (isAdminMode) {
+          if (res.data?.user?.role !== 'admin') {
+            setError('Tài khoản Google này không có quyền Quản trị viên.');
+            return;
+          }
+          navigate('/admin/dashboard');
+        } else {
+          if (res.data?.user?.role === 'admin') {
+            navigate('/admin/dashboard');
+          } else {
+            navigate('/courses');
+          }
+        }
         return;
       }
 
-      // Nếu là tài khoản Google lần đầu đăng nhập/chưa hoàn tất -> Mở form hoàn tất thông tin
+      // Nếu đang ở Cổng Quản Trị mà tài khoản Google chưa có trong hệ thống
+      if (isAdminMode) {
+        setError(
+          'Tài khoản Google này chưa được cấp quyền Quản trị viên. Vui lòng liên hệ ban quản trị hệ thống.'
+        );
+        return;
+      }
+
+      // Nếu là tài khoản Google lần đầu đăng nhập tại Cổng Học Viên -> Mở form hoàn tất thông tin
       setGoogleSelectedData({
         email: res.data?.email || account.email,
         name: res.data?.name || account.name,
@@ -109,13 +146,46 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-slate-200 p-8 sm:p-10">
+        {/* Tab chuyển đổi Cổng Học Viên <-> Cổng Quản Trị */}
+        <div className="flex rounded-2xl bg-slate-100 p-1 mb-6 border border-slate-200">
+          <Link
+            to="/login"
+            className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all ${
+              !isAdminMode
+                ? 'bg-white text-blue-700 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Cổng Học Viên
+          </Link>
+          <Link
+            to="/admin/login"
+            className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-all ${
+              isAdminMode
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Cổng Quản Trị
+          </Link>
+        </div>
+
+        {/* Tiêu đề trang */}
         <div className="text-center mb-6">
-          <div className="inline-flex p-3 bg-blue-50 text-blue-700 rounded-2xl mb-3 shadow-xs">
+          <div
+            className={`inline-flex p-3 rounded-2xl mb-3 shadow-xs ${
+              isAdminMode ? 'bg-indigo-50 text-indigo-700' : 'bg-blue-50 text-blue-700'
+            }`}
+          >
             <Shield className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Đăng Nhập Hệ Thống</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isAdminMode ? 'Đăng Nhập Quản Trị' : 'Đăng Nhập Hệ Thống'}
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Trung tâm Giáo dục Quốc phòng và An ninh
+            {isAdminMode
+              ? 'Cổng Quản lý & Khảo thí Dành cho Cán bộ'
+              : 'Trung tâm Giáo dục Quốc phòng và An ninh'}
           </p>
         </div>
 
@@ -152,7 +222,9 @@ export const LoginPage: React.FC = () => {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>Đăng nhập bằng Google</span>
+            <span>
+              {isAdminMode ? 'Đăng nhập Quản trị bằng Google' : 'Đăng nhập bằng Google'}
+            </span>
           </button>
 
           <div className="relative my-6 text-center">
@@ -168,17 +240,21 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-              Gmail hoặc Mã số sinh viên (MSSV)
+              {isAdminMode ? 'Gmail Quản Trị' : 'Gmail hoặc Mã số sinh viên (MSSV)'}
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User className="w-4 h-4" />
+                {isAdminMode ? <Mail className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
               <input
-                type="text"
+                type={isAdminMode ? 'email' : 'text'}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="VD: sinhvien@gmail.com hoặc 21110001"
+                placeholder={
+                  isAdminMode
+                    ? 'VD: admin@gmail.com hoặc admin@gdqpan.edu.vn'
+                    : 'VD: sinhvien@gmail.com hoặc 21110001'
+                }
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm transition-all"
                 required
               />
@@ -207,20 +283,41 @@ export const LoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 py-3.5 px-4 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xl text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+            className={`w-full mt-2 py-3.5 px-4 text-white font-semibold rounded-xl text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 ${
+              isAdminMode
+                ? 'bg-indigo-700 hover:bg-indigo-800'
+                : 'bg-blue-700 hover:bg-blue-800'
+            }`}
           >
-            {loading ? 'Đang xác thực...' : 'Đăng nhập'}
+            {loading ? 'Đang xác thực...' : isAdminMode ? 'Đăng Nhập Quản Trị' : 'Đăng nhập'}
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-500 space-y-3">
-          <p>
-            Chưa có tài khoản học viên?{' '}
-            <Link to="/register" className="text-blue-600 font-bold hover:underline">
-              Đăng ký tài khoản ngay
-            </Link>
-          </p>
+          {isAdminMode ? (
+            <p>
+              Bạn là sinh viên?{' '}
+              <Link to="/login" className="text-blue-600 font-bold hover:underline">
+                Đăng nhập Cổng Học Viên
+              </Link>
+            </p>
+          ) : (
+            <>
+              <p>
+                Chưa có tài khoản học viên?{' '}
+                <Link to="/register" className="text-blue-600 font-bold hover:underline">
+                  Đăng ký tài khoản ngay
+                </Link>
+              </p>
+              <p>
+                Bạn là Cán bộ / Giảng viên?{' '}
+                <Link to="/admin/login" className="text-blue-600 font-semibold hover:underline">
+                  Đăng nhập Quản trị tại đây
+                </Link>
+              </p>
+            </>
+          )}
           <p>
             <Link to="/" className="text-slate-400 hover:text-slate-600 hover:underline">
               ← Quay lại trang chủ
