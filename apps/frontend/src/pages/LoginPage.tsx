@@ -168,7 +168,7 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-              Mã số sinh viên (MSSV) hoặc Số điện thoại
+              Gmail hoặc Mã số sinh viên (MSSV)
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -178,7 +178,7 @@ export const LoginPage: React.FC = () => {
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="VD: 21110001 hoặc 0912345678"
+                placeholder="VD: sinhvien@gmail.com hoặc 21110001"
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm transition-all"
                 required
               />

@@ -331,7 +331,7 @@ export class AuthController {
     if (!user) {
       res.status(401).json({
         success: false,
-        message: 'Mã số sinh viên (MSSV) hoặc Số điện thoại không tồn tại.',
+        message: 'Gmail hoặc Mã số sinh viên (MSSV) không tồn tại.',
       });
       return;
     }

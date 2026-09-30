@@ -211,7 +211,7 @@ export const GoogleCompleteModal: React.FC<GoogleCompleteModalProps> = ({
               Thiết lập mật khẩu đăng nhập trực tiếp:
             </span>
             <p className="text-[11px] text-blue-800 mb-2 leading-relaxed">
-              Mật khẩu này giúp bạn sau này có thể đăng nhập bằng cả 2 cách: bấm <strong>Google</strong> HOẶC gõ <strong>MSSV / Số điện thoại</strong> + Mật khẩu này.
+              Mật khẩu này giúp bạn sau này có thể đăng nhập bằng cả 2 cách: bấm <strong>Google</strong> HOẶC gõ <strong>Gmail / MSSV</strong> + Mật khẩu này.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
