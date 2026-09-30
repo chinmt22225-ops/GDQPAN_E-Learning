@@ -3,6 +3,7 @@ import { UserRole } from '@elearning/shared';
 
 export interface IUserDocument extends Document {
   mssv: string;
+  phone?: string;
   nameRaw: string;
   nameNormalized: string;
   email: string;
@@ -28,6 +29,12 @@ const UserSchema = new Schema<IUserDocument>(
       index: true,
       uppercase: true,
       trim: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      sparse: true,
+      index: true,
     },
     nameRaw: {
       type: String,

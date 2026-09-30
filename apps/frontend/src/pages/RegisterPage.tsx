@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { GoogleAccountModal } from '../components/GoogleAccountModal.js';
+import { GoogleCompleteModal } from '../components/GoogleCompleteModal.js';
 import {
   User,
   Mail,
   Lock,
+  Phone,
   Building2,
   GraduationCap,
   ShieldCheck,
@@ -24,9 +27,10 @@ export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
 
-  // Form Fields
+  // Biểu mẫu đăng ký trực tiếp
   const [name, setName] = useState('');
   const [mssv, setMssv] = useState('');
+  const [phone, setPhone] = useState('');
   const [school, setSchool] = useState('');
   const [className, setClassName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,25 +38,25 @@ export const RegisterPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [captchaAnswer, setCaptchaAnswer] = useState('');
 
-  // Captcha State
+  // Trạng thái Captcha
   const [captcha, setCaptcha] = useState<CaptchaData | null>(null);
   const [loadingCaptcha, setLoadingCaptcha] = useState(false);
 
-  // Status State
+  // Trạng thái submit & lỗi
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Google Modal State
-  const [googleModalOpen, setGoogleModalOpen] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
-  const [googleMssv, setGoogleMssv] = useState('');
-  const [googleSchool, setGoogleSchool] = useState('');
-  const [googleClass, setGoogleClass] = useState('');
-  const [submittingGoogle, setSubmittingGoogle] = useState(false);
+  // Trạng thái Google OAuth Flow
+  const [googleAccountModalOpen, setGoogleAccountModalOpen] = useState(false);
+  const [googleCompleteModalOpen, setGoogleCompleteModalOpen] = useState(false);
+  const [googleSelectedData, setGoogleSelectedData] = useState<{
+    email: string;
+    name: string;
+    googleId: string;
+  } | null>(null);
 
-  // Tải mã Captcha mới
+  // Lấy mã Captcha mới từ server
   const fetchCaptcha = async () => {
     setLoadingCaptcha(true);
     try {
@@ -72,18 +76,18 @@ export const RegisterPage: React.FC = () => {
     fetchCaptcha();
   }, []);
 
-  // Xử lý nộp biểu mẫu đăng ký truyền thống
+  // Xử lý nộp biểu mẫu đăng ký trực tiếp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Mật khẩu nhập lại không khớp.');
+      setError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
     if (!captcha?.captchaId) {
-      setError('Mã bảo vệ chưa sẵn sàng. Vui lòng tải lại trang.');
+      setError('Mã bảo vệ chưa sẵn sàng. Vui lòng thử lại.');
       return;
     }
 
@@ -95,6 +99,7 @@ export const RegisterPage: React.FC = () => {
         body: JSON.stringify({
           name: name.trim(),
           mssv: mssv.trim().toUpperCase(),
+          phone: phone.trim(),
           school: school.trim(),
           class: className.trim(),
           email: email.trim().toLowerCase(),
@@ -114,62 +119,45 @@ export const RegisterPage: React.FC = () => {
       }
     } catch (err: unknown) {
       setError((err as Error).message || 'Đăng ký không thành công.');
-      // Đổi captcha mới sau khi lỗi
-      fetchCaptcha();
+      fetchCaptcha(); // Tự đổi mã captcha khi lỗi
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Mở luồng đăng ký qua Google
-  const handleOpenGoogleAuth = () => {
-    setError(null);
-    setGoogleEmail('');
-    setGoogleName('');
-    setGoogleMssv('');
-    setGoogleSchool(school);
-    setGoogleClass(className);
-    setGoogleModalOpen(true);
-  };
-
-  // Xác nhận đăng ký qua Google (Bắt buộc MSSV và Họ Tên)
-  const handleGoogleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!googleMssv.trim() || !googleName.trim() || !googleEmail.trim()) {
-      setError('Vui lòng nhập đầy đủ Email Google, Họ tên và Mã số sinh viên (MSSV).');
-      return;
-    }
-
-    setSubmittingGoogle(true);
+  // Bước 1: Khi học sinh chọn một tài khoản Google
+  const handleSelectGoogleAccount = async (account: {
+    email: string;
+    name: string;
+    googleId: string;
+  }) => {
+    setGoogleAccountModalOpen(false);
     setError(null);
 
     try {
-      const googleId = `google_${googleEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-      const res = await apiRequest('/api/auth/google', {
+      // Kiểm tra tài khoản Google đã có trong hệ thống chưa
+      const res = await apiRequest<{ isNewUser?: boolean }>('/api/auth/google', {
         method: 'POST',
         body: JSON.stringify({
-          email: googleEmail.trim().toLowerCase(),
-          name: googleName.trim(),
-          googleId,
-          mssv: googleMssv.trim().toUpperCase(),
-          school: googleSchool.trim(),
-          class: googleClass.trim(),
+          email: account.email,
+          googleId: account.googleId,
+          name: account.name,
         }),
       });
 
-      if (res.success) {
-        setGoogleModalOpen(false);
+      // Nếu tài khoản Google đã có sẵn -> Đăng nhập vào luôn
+      if (res.success && !res.data?.isNewUser) {
         setSuccess(true);
         await refreshUser();
-        setTimeout(() => {
-          navigate('/courses');
-        }, 1500);
+        navigate('/courses');
+        return;
       }
+
+      // Nếu là tài khoản Google mới -> Mở bước 2: Trang hoàn tất thông tin (MSSV, SĐT, Trường, Lớp, Mật khẩu)
+      setGoogleSelectedData(account);
+      setGoogleCompleteModalOpen(true);
     } catch (err: unknown) {
-      setError((err as Error).message || 'Đăng ký bằng Google thất bại.');
-    } finally {
-      setSubmittingGoogle(false);
+      setError((err as Error).message || 'Xác thực Google thất bại.');
     }
   };
 
@@ -195,7 +183,7 @@ export const RegisterPage: React.FC = () => {
             <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
             <h3 className="text-lg font-bold text-emerald-950">Đăng Ký Thành Công!</h3>
             <p className="text-sm text-emerald-800 mt-1">
-              Hệ thống đang chuyển hướng bạn vào danh sách học phần...
+              Đang chuyển hướng bạn vào danh sách học phần...
             </p>
           </div>
         )}
@@ -208,11 +196,11 @@ export const RegisterPage: React.FC = () => {
           </div>
         )}
 
-        {/* PHƯƠNG ÁN 1: ĐĂNG KÝ NHANH QUA GOOGLE */}
+        {/* CÁCH 1: ĐĂNG KÝ BẰNG TÀI KHOẢN GOOGLE */}
         <div className="mb-8">
           <button
             type="button"
-            onClick={handleOpenGoogleAuth}
+            onClick={() => setGoogleAccountModalOpen(true)}
             className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-semibold rounded-2xl text-sm shadow-xs transition-all flex items-center justify-center gap-3 cursor-pointer hover:border-slate-400"
           >
             {/* Google Icon SVG */}
@@ -234,20 +222,20 @@ export const RegisterPage: React.FC = () => {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>Đăng ký & Đăng nhập bằng Google</span>
+            <span>Đăng ký nhanh bằng Google</span>
           </button>
 
           <div className="relative my-6 text-center">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
-            <span className="relative bg-white px-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <span className="relative bg-white px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
               Hoặc điền biểu mẫu đăng ký bên dưới
             </span>
           </div>
         </div>
 
-        {/* PHƯƠNG ÁN 2: FORM ĐĂNG KÝ TRUYỀN THỐNG */}
+        {/* CÁCH 2: FORM ĐĂNG KÝ BẰNG TÀI KHOẢN MẬT KHẨU (KÈM SĐT, TRƯỜNG, LỚP, CAPTCHA) */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Họ và tên */}
@@ -281,6 +269,44 @@ export const RegisterPage: React.FC = () => {
                   onChange={(e) => setMssv(e.target.value)}
                   placeholder="VD: 21110001"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Số điện thoại */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Số Điện Thoại (SĐT) <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="VD: 0912345678"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Địa Chỉ Email <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="VD: sinhvien@gmail.com"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                   required
                 />
               </div>
@@ -322,24 +348,6 @@ export const RegisterPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Địa Chỉ Email <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="VD: sinhvien@gmail.com"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                required
-              />
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Mật khẩu */}
             <div>
@@ -362,7 +370,7 @@ export const RegisterPage: React.FC = () => {
             {/* Nhập lại mật khẩu */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Xác Nhận Mật Khẩu <span className="text-red-500">*</span>
+                Nhập Lại Mật Khẩu <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -370,7 +378,7 @@ export const RegisterPage: React.FC = () => {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Nhập lại mật khẩu"
+                  placeholder="Xác nhận lại mật khẩu"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                   required
                 />
@@ -428,7 +436,7 @@ export const RegisterPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Chân trang chuyển sang Đăng nhập */}
+        {/* Chuyển sang Đăng nhập */}
         <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-500">
           Đã có tài khoản học tập?{' '}
           <Link to="/login" className="text-blue-600 font-bold hover:underline">
@@ -437,110 +445,19 @@ export const RegisterPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL HOÀN TẤT THÔNG TIN CHO GOOGLE SIGN-IN (BẮT BUỘC NHẬP MSSV & HỌ TÊN) */}
-      {googleModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-xl animate-scaleIn">
-            <div className="text-center mb-6">
-              <div className="inline-flex p-3 bg-blue-50 text-blue-700 rounded-2xl mb-2">
-                <GraduationCap className="w-7 h-7" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Xác Nhận Đăng Ký Bằng Google</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Theo quy định, bạn bắt buộc phải cung cấp <strong>MSSV</strong> và <strong>Họ tên</strong> để hệ thống ghi nhận điểm số học phần.
-              </p>
-            </div>
+      {/* POPUP CHỌN TÀI KHOẢN GOOGLE */}
+      <GoogleAccountModal
+        isOpen={googleAccountModalOpen}
+        onClose={() => setGoogleAccountModalOpen(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
 
-            <form onSubmit={handleGoogleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Email Google Của Bạn <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={googleEmail}
-                  onChange={(e) => setGoogleEmail(e.target.value)}
-                  placeholder="VD: sinhvien@gmail.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Họ và Tên Sinh Viên <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={googleName}
-                  onChange={(e) => setGoogleName(e.target.value)}
-                  placeholder="VD: Nguyễn Văn A"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Mã Số Sinh Viên (MSSV) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={googleMssv}
-                  onChange={(e) => setGoogleMssv(e.target.value)}
-                  placeholder="VD: 21110001"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Trường
-                  </label>
-                  <input
-                    type="text"
-                    value={googleSchool}
-                    onChange={(e) => setGoogleSchool(e.target.value)}
-                    placeholder="VD: ĐHQG-HCM"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Lớp
-                  </label>
-                  <input
-                    type="text"
-                    value={googleClass}
-                    onChange={(e) => setGoogleClass(e.target.value)}
-                    placeholder="VD: 21DTH01"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setGoogleModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingGoogle}
-                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm disabled:opacity-60 cursor-pointer"
-                >
-                  {submittingGoogle ? 'Đang xác nhận...' : 'Đăng Ký & Vào Học Ngay'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* POPUP BƯỚC 2: HOÀN TẤT THÔNG TIN HỌC VIÊN KHI ĐĂNG KÝ QUA GOOGLE */}
+      <GoogleCompleteModal
+        isOpen={googleCompleteModalOpen}
+        onClose={() => setGoogleCompleteModalOpen(false)}
+        googleData={googleSelectedData}
+      />
     </div>
   );
 };

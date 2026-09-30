@@ -3,6 +3,7 @@ export type UserRole = 'student' | 'admin';
 export interface IUser {
   _id: string;
   mssv: string;
+  phone?: string;  // Số điện thoại
   nameRaw: string;
   nameNormalized: string;
   email: string;
@@ -18,6 +19,7 @@ export interface IUser {
 export interface UserSessionData {
   userId: string;
   mssv: string;
+  phone?: string;
   name: string;
   email: string;
   role: UserRole;
