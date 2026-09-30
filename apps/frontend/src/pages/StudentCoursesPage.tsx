@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { ICourse } from '@elearning/shared';
-import { ArrowRight, ShieldCheck, Clock } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Clock, ArrowLeft } from 'lucide-react';
 
 export const StudentCoursesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -36,8 +36,20 @@ export const StudentCoursesPage: React.FC = () => {
   }, [user]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
-      <div className="mb-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12 space-y-6">
+      {/* Nút quay lại Trang chủ */}
+      <div>
+        <button
+          type="button"
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-all shadow-xs hover:border-slate-300 group cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Quay lại trang trước</span>
+        </button>
+      </div>
+
+      <div className="mb-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
           Học Phần Của Bạn
         </h1>

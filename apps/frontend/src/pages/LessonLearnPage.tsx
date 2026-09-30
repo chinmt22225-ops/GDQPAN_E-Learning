@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface LessonWithProgress {
@@ -114,6 +115,17 @@ export const LessonLearnPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Nút quay lại danh sách học phần */}
+      <div className="mb-4">
+        <Link
+          to="/courses"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-all shadow-xs hover:border-slate-300 group cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Quay lại danh sách học phần</span>
+        </Link>
+      </div>
+
       {/* Breadcrumb & Tiêu đề bài học */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
