@@ -10,6 +10,7 @@ router.use(requireAdmin);
 
 router.get('/dashboard', AdminController.getDashboardStats);
 router.get('/students', AdminController.getStudents);
+router.delete('/students/:studentId', AdminController.deleteStudent);
 router.get('/export.xlsx', AdminController.exportStudents);
 router.get('/events', AdminController.sseEvents);
 

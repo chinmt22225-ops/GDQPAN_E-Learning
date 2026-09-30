@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { User } from '../models/User.model.js';
 import { LessonProgress } from '../models/LessonProgress.model.js';
 import { Enrollment } from '../models/Enrollment.model.js';
+import { QuizAttempt } from '../models/QuizAttempt.model.js';
 import { ExcelService } from '../services/excel.service.js';
 import { sseService } from './../services/sse.service.js';
 
@@ -119,5 +120,45 @@ export class AdminController {
   static sseEvents(req: Request, res: Response): void {
     const clientId = `${req.user?.userId || 'admin'}_${Date.now()}`;
     sseService.addAdminClient(clientId, res);
+  }
+
+  /**
+   * Xóa vĩnh viễn toàn bộ dữ liệu của một sinh viên
+   */
+  static async deleteStudent(req: Request, res: Response): Promise<void> {
+    const { studentId } = req.params;
+
+    if (!studentId) {
+      res.status(400).json({ success: false, message: 'Thiếu ID sinh viên cần xóa.' });
+      return;
+    }
+
+    const student = await User.findById(studentId);
+    if (!student) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy sinh viên trong hệ thống.' });
+      return;
+    }
+
+    if (student.role !== 'student') {
+      res.status(403).json({ success: false, message: 'Chỉ được phép xóa tài khoản sinh viên.' });
+      return;
+    }
+
+    // Xóa TOÀN BỘ dữ liệu liên quan đến sinh viên này:
+    // 1. Kết quả thi trắc nghiệm (QuizAttempt)
+    // 2. Tiến độ xem video & học tập (LessonProgress)
+    // 3. Ghi danh & tiến trình khóa học (Enrollment)
+    // 4. Bản ghi tài khoản sinh viên (User)
+    await Promise.all([
+      QuizAttempt.deleteMany({ userId: student._id }),
+      LessonProgress.deleteMany({ userId: student._id }),
+      Enrollment.deleteMany({ userId: student._id }),
+      User.findByIdAndDelete(student._id),
+    ]);
+
+    res.json({
+      success: true,
+      message: `Đã xóa vĩnh viễn toàn bộ dữ liệu của sinh viên ${student.nameRaw} (MSSV: ${student.mssv}).`,
+    });
   }
 }
