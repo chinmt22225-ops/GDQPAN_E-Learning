@@ -32,10 +32,17 @@ export const GoogleCompleteModal: React.FC<GoogleCompleteModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cập nhật tên nếu googleData thay đổi
+  // Cập nhật dữ liệu khi googleData thay đổi
   React.useEffect(() => {
-    if (googleData?.name) {
-      setName(googleData.name);
+    if (googleData) {
+      setName(googleData.name || '');
+      setMssv('');
+      setPhone('');
+      setSchool('');
+      setClassName('');
+      setPassword('');
+      setConfirmPassword('');
+      setError(null);
     }
   }, [googleData]);
 

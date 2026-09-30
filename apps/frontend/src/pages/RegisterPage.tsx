@@ -137,7 +137,13 @@ export const RegisterPage: React.FC = () => {
 
     try {
       // Kiểm tra tài khoản Google đã có trong hệ thống chưa
-      const res = await apiRequest<{ isNewUser?: boolean }>('/api/auth/google', {
+      const res = await apiRequest<{
+        isNewUser?: boolean;
+        user?: any;
+        email?: string;
+        name?: string;
+        googleId?: string;
+      }>('/api/auth/google', {
         method: 'POST',
         body: JSON.stringify({
           email: account.email,
@@ -146,8 +152,11 @@ export const RegisterPage: React.FC = () => {
         }),
       });
 
-      // Nếu tài khoản Google đã có sẵn -> Đăng nhập vào luôn
-      if (res.success && !res.data?.isNewUser) {
+      // Kiểm tra rõ ràng cờ isNewUser (tài khoản chưa từng hoàn tất đăng ký)
+      const isNew = res.isNewUser === true || res.data?.isNewUser === true;
+
+      // Nếu tài khoản Google đã có sẵn và không phải người dùng mới -> Đăng nhập vào luôn
+      if (res.success && !isNew) {
         setSuccess(true);
         await refreshUser();
         navigate('/courses');
@@ -155,7 +164,11 @@ export const RegisterPage: React.FC = () => {
       }
 
       // Nếu là tài khoản Google mới -> Mở bước 2: Trang hoàn tất thông tin (MSSV, SĐT, Trường, Lớp, Mật khẩu)
-      setGoogleSelectedData(account);
+      setGoogleSelectedData({
+        email: res.data?.email || account.email,
+        name: res.data?.name || account.name,
+        googleId: res.data?.googleId || account.googleId,
+      });
       setGoogleCompleteModalOpen(true);
     } catch (err: unknown) {
       setError((err as Error).message || 'Xác thực Google thất bại.');

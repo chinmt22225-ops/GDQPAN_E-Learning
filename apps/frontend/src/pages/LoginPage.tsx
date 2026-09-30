@@ -60,7 +60,13 @@ export const LoginPage: React.FC = () => {
 
     try {
       // Gọi backend kiểm tra tài khoản Google
-      const res = await apiRequest<{ isNewUser?: boolean }>('/api/auth/google', {
+      const res = await apiRequest<{
+        isNewUser?: boolean;
+        user?: any;
+        email?: string;
+        name?: string;
+        googleId?: string;
+      }>('/api/auth/google', {
         method: 'POST',
         body: JSON.stringify({
           email: account.email,
@@ -69,15 +75,22 @@ export const LoginPage: React.FC = () => {
         }),
       });
 
-      // Nếu tài khoản Google đã có trong hệ thống -> Đăng nhập thành công ngay
-      if (res.success && !res.data?.isNewUser) {
+      // Kiểm tra rõ ràng cờ isNewUser (tài khoản chưa từng hoàn tất đăng ký)
+      const isNew = res.isNewUser === true || res.data?.isNewUser === true;
+
+      // Nếu tài khoản Google đã có trong hệ thống và không phải tài khoản mới -> Đăng nhập thành công ngay
+      if (res.success && !isNew) {
         await refreshUser();
         navigate('/courses');
         return;
       }
 
       // Nếu là tài khoản Google lần đầu đăng nhập/chưa hoàn tất -> Mở form hoàn tất thông tin
-      setGoogleSelectedData(account);
+      setGoogleSelectedData({
+        email: res.data?.email || account.email,
+        name: res.data?.name || account.name,
+        googleId: res.data?.googleId || account.googleId,
+      });
       setGoogleCompleteModalOpen(true);
     } catch (err: unknown) {
       setError((err as Error).message || 'Đăng nhập bằng Google thất bại.');

@@ -194,8 +194,10 @@ export class AuthController {
 
       res.json({
         success: true,
+        isNewUser: false,
         message: 'Đăng nhập Google thành công!',
         data: {
+          isNewUser: false,
           user: sessionData,
           token: accessToken,
         },
@@ -214,6 +216,7 @@ export class AuthController {
         isNewUser: true,
         message: 'Tài khoản Google mới. Vui lòng hoàn tất thông tin bổ sung.',
         data: {
+          isNewUser: true,
           googleId: cleanGoogleId,
           email: cleanEmail,
           name: name ? String(name).trim() : '',

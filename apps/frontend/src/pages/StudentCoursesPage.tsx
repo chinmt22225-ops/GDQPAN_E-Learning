@@ -1,14 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import { ICourse } from '@elearning/shared';
 import { ArrowRight, ShieldCheck, Clock } from 'lucide-react';
 
 export const StudentCoursesPage: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<ICourse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/login');
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (!user) return;
     const fetchCourses = async () => {
       try {
         const res = await apiRequest<ICourse[]>('/api/student/courses');
@@ -23,7 +33,7 @@ export const StudentCoursesPage: React.FC = () => {
     };
 
     fetchCourses();
-  }, []);
+  }, [user]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
