@@ -7,7 +7,9 @@ export interface IUser {
   nameNormalized: string;
   email: string;
   role: UserRole;
-  class?: string;
+  school?: string; // Trường Đại học / Cao đẳng
+  class?: string;  // Lớp sinh hoạt
+  googleId?: string;
   isActive: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -19,6 +21,8 @@ export interface UserSessionData {
   name: string;
   email: string;
   role: UserRole;
+  school?: string;
+  class?: string;
 }
 
 export interface AuthResponse {

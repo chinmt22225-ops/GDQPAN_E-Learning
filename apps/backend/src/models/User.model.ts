@@ -9,6 +9,8 @@ export interface IUserDocument extends Document {
   passwordHash?: string;
   role: UserRole;
   class?: string;
+  school?: string;
+  googleId?: string;
   isActive: boolean;
   activationToken?: string;
   activationExpires?: Date;
@@ -55,9 +57,18 @@ const UserSchema = new Schema<IUserDocument>(
       default: 'student',
       index: true,
     },
+    school: {
+      type: String,
+      trim: true,
+    },
     class: {
       type: String,
       trim: true,
+    },
+    googleId: {
+      type: String,
+      sparse: true,
+      index: true,
     },
     isActive: {
       type: Boolean,

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { Navbar } from './components/Navbar.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { RegisterPage } from './pages/RegisterPage.js';
 import { ActivatePage } from './pages/ActivatePage.js';
 import { StudentCoursesPage } from './pages/StudentCoursesPage.js';
 import { LessonLearnPage } from './pages/LessonLearnPage.js';
@@ -40,13 +41,24 @@ const HomePage: React.FC = () => {
               Xem video bài giảng lý thuyết (chống tua lướt), làm bài kiểm tra trắc nghiệm từng bài và xem giải thích chi tiết.
             </p>
           </div>
-          <Link
-            to={user?.role === 'student' ? '/courses' : '/login'}
-            className="inline-flex items-center justify-center w-full px-5 py-3.5 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors shadow-sm gap-2"
-          >
-            <span>{user?.role === 'student' ? 'Vào học phần của bạn' : 'Đăng nhập Học tập'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="space-y-2">
+            <Link
+              to={user?.role === 'student' ? '/courses' : '/login'}
+              className="inline-flex items-center justify-center w-full px-5 py-3.5 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors shadow-sm gap-2"
+            >
+              <span>{user?.role === 'student' ? 'Vào học phần của bạn' : 'Đăng nhập Học tập'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            {!user && (
+              <Link
+                to="/register"
+                className="inline-flex items-center justify-center w-full px-5 py-2.5 text-xs font-bold text-blue-700 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-colors gap-1"
+              >
+                <span>Chưa có tài khoản? Đăng ký ngay</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Card Quản trị */}
@@ -106,6 +118,7 @@ export const App: React.FC = () => {
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/admin/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
               <Route path="/activate" element={<ActivatePage />} />
               <Route path="/courses" element={<StudentCoursesPage />} />
               <Route path="/courses/:courseId/learn" element={<LessonLearnPage />} />

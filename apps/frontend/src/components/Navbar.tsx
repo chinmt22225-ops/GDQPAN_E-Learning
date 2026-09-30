@@ -84,6 +84,12 @@ export const Navbar: React.FC = () => {
                 >
                   Đăng nhập
                 </Link>
+                <Link
+                  to="/register"
+                  className="text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-3.5 py-1.5 rounded-lg shadow-xs transition-colors"
+                >
+                  Đăng ký
+                </Link>
               </div>
             )}
           </div>
