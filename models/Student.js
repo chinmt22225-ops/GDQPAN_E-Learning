@@ -1,0 +1,3 @@
+const mongoose=require('mongoose');
+const schema=new mongoose.Schema({studentId:{type:String,required:true,unique:true,index:true,trim:true,uppercase:true},name:{type:String,required:true,trim:true},email:{type:String,required:true,trim:true,lowercase:true},video:{maxSecond:{type:Number,default:0},watchedSeconds:{type:Number,default:0},completed:{type:Boolean,default:false},lastHeartbeat:{type:Date}},score:{type:Number,default:0},passed:{type:Boolean,default:false,index:true},attempts:{type:Number,default:0},completedAt:Date},{timestamps:true});
+schema.index({passed:1,studentId:1}); module.exports=mongoose.model('Student',schema);

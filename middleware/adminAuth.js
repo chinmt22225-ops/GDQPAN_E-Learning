@@ -1,0 +1,1 @@
+const jwt=require('jsonwebtoken'); module.exports=(req,res,next)=>{try{const t=req.cookies.admin_token;if(!t) return res.status(401).json({message:'Chưa đăng nhập quản trị.'});req.admin=jwt.verify(t,process.env.JWT_SECRET);next();}catch(e){res.status(401).json({message:'Phiên đăng nhập không hợp lệ.'});}};
