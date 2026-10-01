@@ -1,16 +1,17 @@
 @echo off
 chcp 65001 > nul
+cd /d "%~dp0"
 cls
 echo ====================================================================
-echo   DỪNG HỆ THỐNG DEMO E-LEARNING GDQP&AN
+echo   DUNG HE THONG DEMO E-LEARNING GDQP-AN
 echo ====================================================================
 echo.
-echo Đang tắt tiến trình Server Node.js (cổng 4000)...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :4000') do taskkill /F /PID %%a >nul 2>&1
+echo Dang tat tien trinh Server tai cong 4000...
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
-echo Đang dừng các container Docker (nếu có)...
+echo Dang dung cac container Docker (neu co)...
 docker compose stop >nul 2>&1
 
 echo.
-echo [HOÀN TẤT] Hệ thống đã được dừng an toàn.
-timeout /t 3
+echo [HOAN TAT] He thong da duoc dung an toan.
+ping 127.0.0.1 -n 3 >nul
