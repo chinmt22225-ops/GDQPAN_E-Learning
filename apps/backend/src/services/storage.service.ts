@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { Request, Response } from 'express';
 import multer from 'multer';
 
@@ -154,11 +155,81 @@ export class StorageService {
     }
   }
 
+  private static durationCache = new Map<string, number>();
+
   /**
-   * Quét và trả về danh sách các file video có sẵn trên hệ thống (contest_videos & uploads)
+   * Quét và trả về thời lượng video tính bằng giây sử dụng ffprobe
    */
-  static listAvailableVideos(): Array<{ filename: string; sizeMB: number; group: string }> {
-    const results: Array<{ filename: string; sizeMB: number; group: string }> = [];
+  static getVideoDurationInSeconds(filePath: string): number | null {
+    try {
+      if (!fs.existsSync(filePath)) return null;
+
+      if (this.durationCache.has(filePath)) {
+        return this.durationCache.get(filePath)!;
+      }
+
+      const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
+      const output = execSync(cmd, { timeout: 4000, encoding: 'utf-8' });
+      const sec = parseFloat(output.trim());
+      if (!isNaN(sec) && sec > 0) {
+        const rounded = Math.round(sec);
+        this.durationCache.set(filePath, rounded);
+        return rounded;
+      }
+    } catch {
+      // ffprobe không khả dụng hoặc lỗi giải mã định dạng
+    }
+    return null;
+  }
+
+  /**
+   * Tìm đường dẫn file vật lý của videoKey trên server
+   */
+  static resolveVideoFilePath(videoKey: string): string | null {
+    if (!videoKey || videoKey.startsWith('http://') || videoKey.startsWith('https://')) {
+      return null;
+    }
+
+    const candidateDirs = [
+      UPLOAD_DIR,
+      path.resolve(process.cwd(), 'uploads', 'contest_videos'),
+      path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'contest_videos'),
+      path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'videos'),
+    ];
+
+    for (const dir of candidateDirs) {
+      const directPath = path.join(dir, videoKey);
+      if (fs.existsSync(directPath)) return directPath;
+
+      try {
+        const decodedKey = decodeURIComponent(videoKey);
+        const decodedPath = path.join(dir, decodedKey);
+        if (fs.existsSync(decodedPath)) return decodedPath;
+      } catch {
+        // ignore decode error
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Quét và trả về danh sách các file video có sẵn trên hệ thống kèm thời lượng tự động quét
+   */
+  static listAvailableVideos(): Array<{
+    filename: string;
+    sizeMB: number;
+    group: string;
+    durationSeconds: number;
+    durationFormatted: string;
+  }> {
+    const results: Array<{
+      filename: string;
+      sizeMB: number;
+      group: string;
+      durationSeconds: number;
+      durationFormatted: string;
+    }> = [];
     const seen = new Set<string>();
 
     const dirs = [
@@ -174,11 +245,19 @@ export class StorageService {
           for (const f of files) {
             if (/\.(mp4|webm|mov|mkv|m4v)$/i.test(f) && !seen.has(f)) {
               seen.add(f);
-              const stat = fs.statSync(path.join(d.path, f));
+              const fullPath = path.join(d.path, f);
+              const stat = fs.statSync(fullPath);
+              const dur = StorageService.getVideoDurationInSeconds(fullPath) || 0;
+              const m = Math.floor(dur / 60);
+              const s = dur % 60;
+              const formatted = dur > 0 ? `${m}:${s.toString().padStart(2, '0')}` : '';
+
               results.push({
                 filename: f,
                 sizeMB: Math.round((stat.size / (1024 * 1024)) * 10) / 10,
                 group: d.group,
+                durationSeconds: dur,
+                durationFormatted: formatted,
               });
             }
           }

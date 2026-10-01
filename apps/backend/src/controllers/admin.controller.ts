@@ -322,10 +322,24 @@ export class AdminController {
     ]);
     const qCountMap = new Map(questionCounts.map((q) => [q._id.toString(), q.count]));
 
-    const result = lessons.map((l) => ({
-      ...l,
-      questionCount: qCountMap.get(l._id.toString()) || 0,
-    }));
+    const result = lessons.map((l) => {
+      let durationSeconds = l.videoDurationSeconds;
+      if (l.videoKey) {
+        const filePath = StorageService.resolveVideoFilePath(l.videoKey);
+        if (filePath) {
+          const probed = StorageService.getVideoDurationInSeconds(filePath);
+          if (probed && probed > 0 && (!durationSeconds || Math.abs(durationSeconds - probed) > 3)) {
+            durationSeconds = probed;
+            Lesson.updateOne({ _id: l._id }, { videoDurationSeconds: probed }).catch(() => {});
+          }
+        }
+      }
+      return {
+        ...l,
+        videoDurationSeconds: durationSeconds,
+        questionCount: qCountMap.get(l._id.toString()) || 0,
+      };
+    });
 
     res.json({ success: true, data: result });
   }
@@ -399,8 +413,22 @@ export class AdminController {
 
     if (title) lesson.title = title.trim();
     if (order !== undefined) lesson.order = Number(order);
-    if (videoKey !== undefined) lesson.videoKey = videoKey.trim();
-    if (videoDurationSeconds !== undefined) lesson.videoDurationSeconds = Number(videoDurationSeconds);
+    if (videoKey !== undefined) {
+      lesson.videoKey = videoKey.trim();
+      if (videoDurationSeconds && Number(videoDurationSeconds) > 0) {
+        lesson.videoDurationSeconds = Number(videoDurationSeconds);
+      } else {
+        const filePath = lesson.videoKey ? StorageService.resolveVideoFilePath(lesson.videoKey) : null;
+        if (filePath) {
+          const probed = StorageService.getVideoDurationInSeconds(filePath);
+          if (probed && probed > 0) {
+            lesson.videoDurationSeconds = probed;
+          }
+        }
+      }
+    } else if (videoDurationSeconds !== undefined) {
+      lesson.videoDurationSeconds = Number(videoDurationSeconds);
+    }
     if (minCoveragePercent !== undefined) lesson.minCoveragePercent = Number(minCoveragePercent);
     if (passScore !== undefined) lesson.passScore = Number(passScore);
     if (totalQuestionsPerQuiz !== undefined) lesson.totalQuestionsPerQuiz = Number(totalQuestionsPerQuiz);
@@ -456,8 +484,13 @@ export class AdminController {
 
     lesson.videoKey = req.file.filename;
 
-    // Nếu admin gửi kèm thời lượng video (phút)
-    if (req.body.videoDurationMinutes) {
+    // Tự động quét thời lượng video chính xác bằng ffprobe trên máy chủ
+    const probed = StorageService.getVideoDurationInSeconds(req.file.path);
+    if (probed && probed > 0) {
+      lesson.videoDurationSeconds = probed;
+    } else if (req.body.videoDurationSeconds && Number(req.body.videoDurationSeconds) > 0) {
+      lesson.videoDurationSeconds = Number(req.body.videoDurationSeconds);
+    } else if (req.body.videoDurationMinutes) {
       lesson.videoDurationSeconds = Math.max(1, Number(req.body.videoDurationMinutes) * 60);
     }
 

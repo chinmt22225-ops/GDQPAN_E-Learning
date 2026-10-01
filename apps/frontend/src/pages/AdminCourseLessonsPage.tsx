@@ -121,12 +121,20 @@ export const AdminCourseLessonsPage: React.FC = () => {
   const [videoModalLesson, setVideoModalLesson] = useState<LessonAdminItem | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrlInput, setVideoUrlInput] = useState<string>('');
-  const [videoDurationInput, setVideoDurationInput] = useState<number>(15);
+  const [videoDurationSeconds, setVideoDurationSeconds] = useState<number>(0);
   const [videoUploading, setVideoUploading] = useState<boolean>(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [videoTab, setVideoTab] = useState<'upload' | 'url' | 'server'>('upload');
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
-  const [serverVideos, setServerVideos] = useState<Array<{ filename: string; sizeMB: number; group: string }>>([]);
+  const [serverVideos, setServerVideos] = useState<
+    Array<{
+      filename: string;
+      sizeMB: number;
+      group: string;
+      durationSeconds: number;
+      durationFormatted: string;
+    }>
+  >([]);
   const [selectedServerVideo, setSelectedServerVideo] = useState<string>('');
   const [loadingServerVideos, setLoadingServerVideos] = useState<boolean>(false);
 
@@ -218,7 +226,12 @@ export const AdminCourseLessonsPage: React.FC = () => {
       title: lessonFormData.title.trim(),
       order: Number(lessonFormData.order),
       videoKey: lessonFormData.videoKey.trim(),
-      videoDurationSeconds: Number(lessonFormData.videoDurationMinutes) * 60,
+      videoDurationSeconds:
+        editingLesson &&
+        lessonFormData.videoKey === editingLesson.videoKey &&
+        editingLesson.videoDurationSeconds > 0
+          ? editingLesson.videoDurationSeconds
+          : Number(lessonFormData.videoDurationMinutes) * 60,
       minCoveragePercent: Number(lessonFormData.minCoveragePercent) / 100,
       passScore: Number(lessonFormData.passScore),
       totalQuestionsPerQuiz: Number(lessonFormData.totalQuestionsPerQuiz),
@@ -283,7 +296,15 @@ export const AdminCourseLessonsPage: React.FC = () => {
   const fetchServerVideos = async () => {
     setLoadingServerVideos(true);
     try {
-      const res = await apiRequest<Array<{ filename: string; sizeMB: number; group: string }>>('/api/admin/server-videos');
+      const res = await apiRequest<
+        Array<{
+          filename: string;
+          sizeMB: number;
+          group: string;
+          durationSeconds: number;
+          durationFormatted: string;
+        }>
+      >('/api/admin/server-videos');
       if (res.success && res.data) {
         setServerVideos(res.data);
       }
@@ -297,9 +318,13 @@ export const AdminCourseLessonsPage: React.FC = () => {
   const handleOpenVideoModal = (lesson: LessonAdminItem) => {
     setVideoModalLesson(lesson);
     setVideoFile(null);
-    setVideoUrlInput(lesson.videoKey || '');
+    setVideoUrlInput(
+      lesson.videoKey && (lesson.videoKey.startsWith('http://') || lesson.videoKey.startsWith('https://'))
+        ? lesson.videoKey
+        : ''
+    );
     setSelectedServerVideo(lesson.videoKey || '');
-    setVideoDurationInput(Math.round(lesson.videoDurationSeconds / 60) || 15);
+    setVideoDurationSeconds(lesson.videoDurationSeconds || 0);
     setVideoUploadProgress(0);
     setVideoUploading(false);
     setVideoUploadError(null);
@@ -319,7 +344,7 @@ export const AdminCourseLessonsPage: React.FC = () => {
 
     const formData = new FormData();
     formData.append('video', videoFile);
-    formData.append('videoDurationMinutes', String(videoDurationInput || 15));
+    formData.append('videoDurationSeconds', String(videoDurationSeconds || 0));
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/admin/lessons/${videoModalLesson._id}/video`);
@@ -383,7 +408,7 @@ export const AdminCourseLessonsPage: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({
           videoKey: selectedServerVideo,
-          videoDurationSeconds: Number(videoDurationInput || 15) * 60,
+          videoDurationSeconds: videoDurationSeconds || 0,
         }),
       });
 
@@ -418,7 +443,7 @@ export const AdminCourseLessonsPage: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({
           videoKey: videoUrlInput.trim(),
-          videoDurationSeconds: Number(videoDurationInput || 15) * 60,
+          videoDurationSeconds: videoDurationSeconds || 0,
         }),
       });
 
@@ -852,7 +877,7 @@ export const AdminCourseLessonsPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Thời lượng: <strong>{Math.round(lesson.videoDurationSeconds / 60)} phút</strong>
+                        Thời lượng: <strong>{lesson.videoDurationSeconds > 0 ? `${Math.floor(lesson.videoDurationSeconds / 60)}p ${lesson.videoDurationSeconds % 60}s` : 'Chưa có'}</strong>
                       </span>
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -1637,8 +1662,25 @@ export const AdminCourseLessonsPage: React.FC = () => {
                         : `/api/student/lessons/${videoModalLesson._id}/stream`
                     }
                     controls
+                    onLoadedMetadata={(e) => {
+                      const dur = Math.round(e.currentTarget.duration);
+                      if (dur > 0) {
+                        setVideoDurationSeconds(dur);
+                      }
+                    }}
                     className="w-full h-full object-contain"
                   />
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1 px-1">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    Thời lượng video quét được:
+                  </span>
+                  <span className="font-bold text-emerald-400 font-mono">
+                    {videoDurationSeconds > 0
+                      ? `${Math.floor(videoDurationSeconds / 60)}:${(videoDurationSeconds % 60).toString().padStart(2, '0')} (${videoDurationSeconds} giây)`
+                      : 'Đang tải thông tin thời lượng...'}
+                  </span>
                 </div>
               </div>
             )}
@@ -1710,8 +1752,21 @@ export const AdminCourseLessonsPage: React.FC = () => {
                     accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
-                        setVideoFile(e.target.files[0]);
+                        const file = e.target.files[0];
+                        setVideoFile(file);
                         setVideoUploadError(null);
+
+                        // Tự động quét thời lượng video ngay trên trình duyệt
+                        const tempVideo = document.createElement('video');
+                        tempVideo.preload = 'metadata';
+                        tempVideo.src = URL.createObjectURL(file);
+                        tempVideo.onloadedmetadata = () => {
+                          URL.revokeObjectURL(tempVideo.src);
+                          const dur = Math.round(tempVideo.duration);
+                          if (dur > 0) {
+                            setVideoDurationSeconds(dur);
+                          }
+                        };
                       }
                     }}
                     className="hidden"
@@ -1731,19 +1786,31 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Thời lượng video ước tính (phút)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={videoDurationInput}
-                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Hệ thống sẽ dựa vào thời lượng này để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
+                {/* Hộp hiển thị thời lượng tự động quét */}
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-emerald-950">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-5 h-5 text-emerald-700 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 block">
+                          Thời lượng video (Tự động quét):
+                        </span>
+                        <p className="text-sm font-black text-emerald-900 mt-0.5">
+                          {videoDurationSeconds > 0
+                            ? `${Math.floor(videoDurationSeconds / 60)} phút ${videoDurationSeconds % 60} giây (${videoDurationSeconds} giây)`
+                            : videoFile
+                            ? 'Đang quét thời lượng file video...'
+                            : 'Chưa chọn file video'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-full border border-emerald-300 shadow-2xs">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Tự động tính % hoàn thành
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-emerald-700/80 mt-2 block">
+                    Hệ thống tự động quét thời lượng thực tế của file video để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
                   </span>
                 </div>
 
@@ -1822,32 +1889,51 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   ) : (
                     <select
                       value={selectedServerVideo}
-                      onChange={(e) => setSelectedServerVideo(e.target.value)}
+                      onChange={(e) => {
+                        const filename = e.target.value;
+                        setSelectedServerVideo(filename);
+                        const found = serverVideos.find((v) => v.filename === filename);
+                        if (found && found.durationSeconds && found.durationSeconds > 0) {
+                          setVideoDurationSeconds(found.durationSeconds);
+                        }
+                      }}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
                     >
                       <option value="">-- Chọn video bài giảng ({serverVideos.length} file sẵn có) --</option>
                       {serverVideos.map((v) => (
                         <option key={v.filename} value={v.filename}>
-                          {v.filename} ({v.sizeMB} MB)
+                          {v.filename} ({v.sizeMB} MB{v.durationFormatted ? ` - Thời lượng: ${v.durationFormatted}` : ''})
                         </option>
                       ))}
                     </select>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Thời lượng video ước tính (phút)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={videoDurationInput}
-                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Hệ thống sẽ dựa vào thời lượng này để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
+                {/* Hộp hiển thị thời lượng tự động quét */}
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-emerald-950">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-5 h-5 text-emerald-700 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 block">
+                          Thời lượng video (Tự động nhận diện):
+                        </span>
+                        <p className="text-sm font-black text-emerald-900 mt-0.5">
+                          {videoDurationSeconds > 0
+                            ? `${Math.floor(videoDurationSeconds / 60)} phút ${videoDurationSeconds % 60} giây (${videoDurationSeconds} giây)`
+                            : selectedServerVideo
+                            ? 'Đang nhận diện thời lượng...'
+                            : 'Vui lòng chọn video để hệ thống tự động quét thời lượng'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-full border border-emerald-300 shadow-2xs">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Tự động tính % hoàn thành
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-emerald-700/80 mt-2 block">
+                    Hệ thống tự động liên kết thời lượng video đã quét trên máy chủ để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
                   </span>
                 </div>
 
@@ -1890,7 +1976,19 @@ export const AdminCourseLessonsPage: React.FC = () => {
                     type="text"
                     required
                     value={videoUrlInput}
-                    onChange={(e) => setVideoUrlInput(e.target.value)}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      setVideoUrlInput(url);
+                      if (url.startsWith('http://') || url.startsWith('https://')) {
+                        const tempVideo = document.createElement('video');
+                        tempVideo.preload = 'metadata';
+                        tempVideo.src = url;
+                        tempVideo.onloadedmetadata = () => {
+                          const dur = Math.round(tempVideo.duration);
+                          if (dur > 0) setVideoDurationSeconds(dur);
+                        };
+                      }
+                    }}
                     placeholder="https://pub-xxxx.r2.dev/video-bai-1.m3u8 hoặc .mp4"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono text-xs"
                   />
@@ -1899,17 +1997,32 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Thời lượng video (phút)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={videoDurationInput}
-                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
+                {/* Hộp hiển thị thời lượng tự động quét */}
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-emerald-950">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-5 h-5 text-emerald-700 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 block">
+                          Thời lượng video (Tự động nhận diện):
+                        </span>
+                        <p className="text-sm font-black text-emerald-900 mt-0.5">
+                          {videoDurationSeconds > 0
+                            ? `${Math.floor(videoDurationSeconds / 60)} phút ${videoDurationSeconds % 60} giây (${videoDurationSeconds} giây)`
+                            : videoUrlInput
+                            ? 'Đang kết nối luồng để nhận diện thời lượng...'
+                            : 'Chưa nhập URL video'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-full border border-emerald-300 shadow-2xs">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Tự động tính % hoàn thành
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-emerald-700/80 mt-2 block">
+                    Khi sinh viên xem video từ link này, hệ thống sẽ tự động đồng bộ thời lượng phát chuẩn để tính tỷ lệ xem hoàn thành (≥ 95%).
+                  </span>
                 </div>
 
                 {videoUploadError && (

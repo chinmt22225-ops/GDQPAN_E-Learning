@@ -14,7 +14,16 @@ export class VideoService {
       throw new Error('Bài học không tồn tại.');
     }
 
-    const duration = lesson.videoDurationSeconds > 0 ? lesson.videoDurationSeconds : 900; // Mặc định 15p (900s) nếu chưa đặt
+    // Tự động đồng bộ thời lượng video từ trình phát thực tế nếu chưa chính xác
+    if (input.duration && input.duration > 0) {
+      const playerDur = Math.round(input.duration);
+      if (!lesson.videoDurationSeconds || Math.abs(lesson.videoDurationSeconds - playerDur) > 3) {
+        lesson.videoDurationSeconds = playerDur;
+        await lesson.save().catch(() => {});
+      }
+    }
+
+    const duration = lesson.videoDurationSeconds > 0 ? lesson.videoDurationSeconds : (input.duration ? Math.round(input.duration) : 900);
     const totalBlocks = Math.max(1, Math.ceil(duration / 5)); // Chia khối 5 giây chuẩn ADR-08
 
     let progress = await LessonProgress.findOne({ userId, lessonId });

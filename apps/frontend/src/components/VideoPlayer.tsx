@@ -102,6 +102,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             currentTime: v.currentTime,
             playing: !v.paused,
             playbackRate: v.playbackRate,
+            duration: v.duration && !isNaN(v.duration) && v.duration > 0 ? Math.round(v.duration) : undefined,
           }),
         }
       );
