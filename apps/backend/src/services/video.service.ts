@@ -73,6 +73,12 @@ export class VideoService {
     // Chỉ tích lũy block khi video đang phát thực sự, tốc độ <= 1.05x và không gian lận tua nhanh
     if (input.playing && input.playbackRate <= 1.05 && isValidPlayback) {
       const currentSecond = Math.max(0, input.currentTime);
+
+      // Nếu bắt đầu xem từ đầu (0-15s) và bài học chưa hoàn thành: Làm mới lại danh sách blocks để tiến độ tính từ 0%
+      if (currentSecond <= 15 && !progress.passed && !progress.videoCompleted) {
+        progress.coveredBlocks = [];
+      }
+
       const startSecond = Math.max(0, currentSecond - 16); // Khoảng 15s vừa trôi qua giữa 2 lần heartbeat
 
       const startBlock = Math.floor(startSecond / 5);

@@ -7,6 +7,7 @@ import { Enrollment } from '../models/Enrollment.model.js';
 import { VideoService } from '../services/video.service.js';
 import { QuizService } from '../services/quiz.service.js';
 import { StorageService } from '../services/storage.service.js';
+import { getRedisClient } from '../config/redis.js';
 
 export class StudentController {
   static async getCourses(req: Request, res: Response): Promise<void> {
@@ -83,7 +84,8 @@ export class StudentController {
         ...lesson,
         progress: {
           status: p?.status || 'NOT_STARTED',
-          coveragePercent: p ? Math.round(p.coveragePercent * 100) : 0,
+          // Khi vào lại học bài giảng: Nếu chưa hoàn thành thì thanh tiến độ reset về 0%
+          coveragePercent: p?.videoCompleted ? 100 : (p?.passed ? Math.round(p.coveragePercent * 100) : 0),
           videoCompleted: p?.videoCompleted || false,
           passed: p?.passed || false,
           highestScore: p?.highestScore || 0,
@@ -108,18 +110,54 @@ export class StudentController {
   static async heartbeat(req: Request, res: Response): Promise<void> {
     const userId = req.user!.userId;
     const lessonId = req.params.lessonId;
-    const { currentTime, playing, playbackRate } = req.body;
+    const { currentTime, playing, playbackRate, duration } = req.body;
 
     try {
       const result = await VideoService.recordHeartbeat(userId, lessonId, {
         currentTime: Number(currentTime),
         playing: Boolean(playing),
         playbackRate: Number(playbackRate || 1.0),
+        duration: duration ? Number(duration) : undefined,
       });
 
       res.json({ success: true, data: result });
     } catch (err: unknown) {
       res.status(400).json({ success: false, message: (err as Error).message });
+    }
+  }
+
+  static async resetLessonProgress(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.userId;
+    const lessonId = req.params.lessonId;
+
+    try {
+      const progress = await LessonProgress.findOne({ userId, lessonId });
+      if (progress) {
+        progress.coveredBlocks = [];
+        progress.coveragePercent = 0;
+        // Nếu chưa hoàn thành bài thi trắc nghiệm thì làm mới lại trạng thái xem video
+        if (!progress.passed) {
+          progress.videoCompleted = false;
+          if (progress.status === 'WATCHING' || progress.status === 'QUIZ_UNLOCKED') {
+            progress.status = 'WATCHING';
+          }
+        }
+        await progress.save();
+      }
+
+      const redis = getRedisClient();
+      await redis.del(`heartbeat:${userId}:${lessonId}`).catch(() => {});
+
+      res.json({
+        success: true,
+        message: 'Đã thiết lập lại tiến độ xem video bài học về 0%.',
+        data: {
+          coveragePercent: 0,
+          videoCompleted: progress?.videoCompleted || false,
+        },
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Lỗi khi reset tiến độ bài học.' });
     }
   }
 

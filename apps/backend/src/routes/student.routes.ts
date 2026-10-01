@@ -13,6 +13,7 @@ router.get('/courses', StudentController.getCourses);
 router.get('/courses/:courseId/lessons', StudentController.getCourseLessons);
 router.get('/lessons/:lessonId/stream', StudentController.getLessonStream);
 router.post('/lessons/:lessonId/heartbeat', validateBody(videoHeartbeatSchema), StudentController.heartbeat);
+router.post('/lessons/:lessonId/reset-progress', StudentController.resetLessonProgress);
 router.get('/lessons/:lessonId/quiz', StudentController.getQuiz);
 router.post('/lessons/:lessonId/quiz/submit', validateBody(quizSubmitSchema), StudentController.submitQuiz);
 

@@ -25,10 +25,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const hlsRef = useRef<Hls | null>(null);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [coverage, setCoverage] = useState<number>(initialCoveragePercent);
+  const [coverage, setCoverage] = useState<number>(initialVideoCompleted ? Math.max(initialCoveragePercent, 100) : 0);
   const [completed, setCompleted] = useState<boolean>(initialVideoCompleted);
   const [highestWatchedTime, setHighestWatchedTime] = useState<number>(0);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
+
+  // Khi vào lại học: Tự động reset thanh tiến độ về 0% và làm mới phiên học (nếu chưa hoàn thành)
+  useEffect(() => {
+    setCoverage(initialVideoCompleted ? 100 : 0);
+    setHighestWatchedTime(0);
+    setIsPlaying(false);
+    if (!initialVideoCompleted) {
+      apiRequest(`/api/student/lessons/${lessonId}/reset-progress`, {
+        method: 'POST',
+      }).catch(() => {});
+    }
+  }, [lessonId, initialVideoCompleted]);
+
+  const handleResetProgress = async () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+    setHighestWatchedTime(0);
+    setCoverage(0);
+    try {
+      await apiRequest(`/api/student/lessons/${lessonId}/reset-progress`, {
+        method: 'POST',
+      });
+    } catch {
+      // ignore
+    }
+  };
 
   // Nguồn phát video: Ưu tiên link truyền vào hoặc stream trực tiếp từ API bài học
   const activeVideoSource =
@@ -232,8 +259,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-          <span className="text-slate-400 flex items-center gap-1.5">
+          <span className="text-slate-400 flex items-center gap-1.5 flex-wrap">
             🔒 <strong>Chống gian lận:</strong> Khóa tốc độ 1.0x & thanh tua chỉ cho phép xem lại đoạn cũ.
+            {!completed && (
+              <button
+                type="button"
+                onClick={handleResetProgress}
+                className="ml-2 text-blue-400 hover:text-blue-300 font-medium underline inline-flex items-center gap-1 cursor-pointer transition-colors"
+                title="Bấm để xem lại từ đầu và đặt lại tiến độ về 0%"
+              >
+                ↺ Xem lại từ đầu (Reset 0%)
+              </button>
+            )}
           </span>
           {completed ? (
             <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/80 border border-emerald-700/80 px-2.5 py-0.5 rounded-full">

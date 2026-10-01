@@ -300,7 +300,7 @@ export const LessonLearnPage: React.FC = () => {
                 lessonId={activeLesson._id}
                 videoUrl={activeLesson.videoKey}
                 minCoveragePercent={Math.round(activeLesson.minCoveragePercent * 100)}
-                initialCoveragePercent={activeLesson.progress.coveragePercent}
+                initialCoveragePercent={activeLesson.progress.videoCompleted ? 100 : 0}
                 initialVideoCompleted={activeLesson.progress.videoCompleted}
                 onVideoCompleted={handleVideoCompleted}
               />
