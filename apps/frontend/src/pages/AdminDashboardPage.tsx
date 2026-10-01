@@ -10,6 +10,7 @@ import {
   Activity,
   TrendingUp,
   ArrowLeft,
+  BookOpen,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -97,7 +98,14 @@ export const AdminDashboardPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/admin/courses"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Khóa học & Đề thi</span>
+          </Link>
           <Link
             to="/admin/students"
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm transition-colors"

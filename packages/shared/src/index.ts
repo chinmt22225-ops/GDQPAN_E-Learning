@@ -11,3 +11,4 @@ export * from './schemas/auth.schema.js';
 export * from './schemas/heartbeat.schema.js';
 export * from './schemas/quiz.schema.js';
 export * from './schemas/student.schema.js';
+export * from './schemas/course.schema.js';

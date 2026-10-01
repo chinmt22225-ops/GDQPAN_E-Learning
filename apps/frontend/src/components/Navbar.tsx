@@ -51,6 +51,13 @@ export const Navbar: React.FC = () => {
                       <span className="hidden sm:inline">Dashboard</span>
                     </Link>
                     <Link
+                      to="/admin/courses"
+                      className="flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">Khóa học & Đề thi</span>
+                    </Link>
+                    <Link
                       to="/admin/students"
                       className="flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
                     >

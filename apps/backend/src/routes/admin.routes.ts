@@ -21,4 +21,22 @@ router.post(
   AdminController.importStudents
 );
 
+// Quản lý Khóa học (Courses)
+router.get('/courses', AdminController.getCourses);
+router.post('/courses', AdminController.createCourse);
+router.put('/courses/:courseId', AdminController.updateCourse);
+router.delete('/courses/:courseId', AdminController.deleteCourse);
+
+// Quản lý Bài học (Lessons)
+router.get('/courses/:courseId/lessons', AdminController.getLessonsByCourse);
+router.post('/courses/:courseId/lessons', AdminController.createLesson);
+router.put('/lessons/:lessonId', AdminController.updateLesson);
+router.delete('/lessons/:lessonId', AdminController.deleteLesson);
+
+// Quản lý Ngân hàng Câu hỏi (Questions)
+router.get('/lessons/:lessonId/questions', AdminController.getQuestionsByLesson);
+router.post('/lessons/:lessonId/questions', AdminController.createQuestion);
+router.put('/questions/:questionId', AdminController.updateQuestion);
+router.delete('/questions/:questionId', AdminController.deleteQuestion);
+
 export const adminRoutes = router;

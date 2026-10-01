@@ -9,6 +9,8 @@ import { StudentCoursesPage } from './pages/StudentCoursesPage.js';
 import { LessonLearnPage } from './pages/LessonLearnPage.js';
 import { AdminDashboardPage } from './pages/AdminDashboardPage.js';
 import { AdminStudentsPage } from './pages/AdminStudentsPage.js';
+import { AdminCoursesPage } from './pages/AdminCoursesPage.js';
+import { AdminCourseLessonsPage } from './pages/AdminCourseLessonsPage.js';
 import { Shield, BookOpen, UserCheck, Award, ArrowRight } from 'lucide-react';
 
 const HomePage: React.FC = () => {
@@ -123,6 +125,8 @@ export const App: React.FC = () => {
               <Route path="/courses" element={<StudentCoursesPage />} />
               <Route path="/courses/:courseId/learn" element={<LessonLearnPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+              <Route path="/admin/courses" element={<AdminCoursesPage />} />
+              <Route path="/admin/courses/:courseId/lessons" element={<AdminCourseLessonsPage />} />
               <Route path="/admin/students" element={<AdminStudentsPage />} />
             </Routes>
           </main>
