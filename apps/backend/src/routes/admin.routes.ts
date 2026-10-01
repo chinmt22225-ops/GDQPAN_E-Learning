@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { AdminController } from '../controllers/admin.controller.js';
+import { ContestController } from '../controllers/contest.controller.js';
 import { requireAdmin } from '../middleware/auth.middleware.js';
 import { videoUploadMiddleware } from '../services/storage.service.js';
 
@@ -47,5 +48,12 @@ router.post(
 router.post('/lessons/:lessonId/questions', AdminController.createQuestion);
 router.put('/questions/:questionId', AdminController.updateQuestion);
 router.delete('/questions/:questionId', AdminController.deleteQuestion);
+
+// Hội thi Chấm Điểm Video Trực Tuyến (Contest Judging)
+router.get('/contest/submissions', ContestController.getSubmissions);
+router.get('/contest/submissions/:id', ContestController.getSubmissionById);
+router.get('/contest/submissions/:id/video', ContestController.streamSubmissionVideo);
+router.put('/contest/submissions/:id/score', ContestController.updateJudgeScore);
+router.get('/contest/export-excel', ContestController.exportScoresExcel);
 
 export const adminRoutes = router;

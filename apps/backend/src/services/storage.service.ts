@@ -61,7 +61,27 @@ export class StorageService {
       return;
     }
 
-    const filePath = path.join(UPLOAD_DIR, videoKey);
+    let filePath = path.join(UPLOAD_DIR, videoKey);
+    const contestDir = path.resolve(process.cwd(), 'uploads', 'contest_videos');
+    if (!fs.existsSync(filePath)) {
+      const contestPath = path.join(contestDir, videoKey);
+      if (fs.existsSync(contestPath)) {
+        filePath = contestPath;
+      }
+    }
+
+    if (!fs.existsSync(filePath)) {
+      // Thử decodeURI nếu tên file chứa ký tự đặc biệt
+      try {
+        const decodedKey = decodeURIComponent(videoKey);
+        const contestPathDecoded = path.join(contestDir, decodedKey);
+        if (fs.existsSync(contestPathDecoded)) {
+          filePath = contestPathDecoded;
+        }
+      } catch {
+        // ignore error
+      }
+    }
 
     if (!fs.existsSync(filePath)) {
       // Nếu file local không tìm thấy, fallback sang video mẫu demo

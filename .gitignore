@@ -57,5 +57,6 @@ Thumbs.db
 # Temporary & cache folders
 tmp/
 temp/
+temp_docs/
 uploads/
 apps/backend/uploads/

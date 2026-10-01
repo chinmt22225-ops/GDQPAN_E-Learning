@@ -13,6 +13,7 @@ declare global {
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   const token =
     req.cookies?.access_token ||
+    (req.query?.token as string) ||
     req.headers.authorization?.replace(/^Bearer\s+/i, '');
 
   if (!token) {
