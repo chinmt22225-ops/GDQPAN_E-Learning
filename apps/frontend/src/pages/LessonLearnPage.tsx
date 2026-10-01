@@ -9,9 +9,12 @@ import {
   PlayCircle,
   FileQuestion,
   ChevronRight,
+  ChevronLeft,
   Menu,
   X,
   ArrowLeft,
+  Sparkles,
+  Trophy,
 } from 'lucide-react';
 
 interface LessonWithProgress {
@@ -40,6 +43,7 @@ export const LessonLearnPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'video' | 'quiz'>('video');
   const [loading, setLoading] = useState<boolean>(true);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const [videoFinishedNotice, setVideoFinishedNotice] = useState<boolean>(false);
 
   const fetchLessons = async (keepActive = true) => {
     try {
@@ -64,8 +68,16 @@ export const LessonLearnPage: React.FC = () => {
   }, [courseId]);
 
   const activeLesson = lessons.find((l) => l._id === activeLessonId) || lessons[0];
+  const currentIndex = lessons.findIndex((l) => l._id === (activeLesson?._id || ''));
+  const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
+  const nextLesson = currentIndex >= 0 && currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
+
+  const passedLessonsCount = lessons.filter((l) => l.progress.passed).length;
+  const courseProgressPercent = lessons.length > 0 ? Math.round((passedLessonsCount / lessons.length) * 100) : 0;
+  const isCourseAllPassed = lessons.length > 0 && passedLessonsCount === lessons.length;
 
   const handleVideoCompleted = () => {
+    setVideoFinishedNotice(true);
     // Cập nhật trạng thái bài học hiện tại trong danh sách
     setLessons((prev) =>
       prev.map((l) =>
@@ -85,6 +97,14 @@ export const LessonLearnPage: React.FC = () => {
 
   const handleQuizSuccess = () => {
     fetchLessons(true);
+  };
+
+  const handleSelectLesson = (lessonId: string) => {
+    setActiveLessonId(lessonId);
+    setActiveTab('video');
+    setVideoFinishedNotice(false);
+    setSidebarOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) {
@@ -114,20 +134,62 @@ export const LessonLearnPage: React.FC = () => {
     activeLesson.progress.status === 'FAILED';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Nút quay lại danh sách học phần */}
-      <div className="mb-4">
-        <Link
-          to="/courses"
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-all shadow-xs hover:border-slate-300 group cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Quay lại danh sách học phần</span>
-        </Link>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* Nút quay lại & Thanh tiến độ toàn khóa */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Link
+            to="/courses"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-all shadow-xs hover:border-slate-300 group cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Quay lại danh sách học phần</span>
+          </Link>
+        </div>
+
+        {/* Thanh tiến độ khóa học tóm tắt */}
+        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="text-right">
+            <span className="text-[11px] text-slate-400 block font-medium">Tiến độ học phần</span>
+            <span className="text-xs font-bold text-slate-800">
+              {passedLessonsCount}/{lessons.length} bài đạt ({courseProgressPercent}%)
+            </span>
+          </div>
+          <div className="w-24 bg-slate-200 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${isCourseAllPassed ? 'bg-emerald-600' : 'bg-blue-600'}`}
+              style={{ width: `${courseProgressPercent}%` }}
+            />
+          </div>
+          {isCourseAllPassed && (
+            <span className="p-1 rounded-full bg-emerald-100 text-emerald-700" title="Đã hoàn thành môn học!">
+              <Trophy className="w-4 h-4" />
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Banner chúc mừng nếu đã hoàn thành toàn bộ bài học */}
+      {isCourseAllPassed && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-600 text-white rounded-xl">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-emerald-950">
+                XIN CHÚC MỪNG! BẠN ĐÃ HOÀN THÀNH TOÀN BỘ HỌC PHẦN
+              </h4>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                Bạn đã đạt tất cả {lessons.length} bài học. Bạn vẫn có thể xem lại video hoặc thi lại từng bài để nâng điểm.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb & Tiêu đề bài học */}
-      <div className="flex items-center justify-between gap-4 mb-6">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
             <Link to="/courses" className="hover:text-blue-600">
@@ -144,9 +206,10 @@ export const LessonLearnPage: React.FC = () => {
         {/* Nút bật tắt Sidebar trên Mobile */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="lg:hidden p-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm"
+          className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm text-xs font-bold cursor-pointer"
         >
-          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          <span>{sidebarOpen ? 'Đóng mục lục' : 'Mục lục bài học'}</span>
         </button>
       </div>
 
@@ -203,6 +266,35 @@ export const LessonLearnPage: React.FC = () => {
           {/* Nội dung chính tương ứng với Tab */}
           {activeTab === 'video' ? (
             <div className="space-y-6">
+              {/* Thông báo chúc mừng khi hoàn thành video */}
+              {videoFinishedNotice && (
+                <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-600 text-white rounded-xl flex-shrink-0">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-950">
+                        Chúc mừng bạn đã xem đủ video bài giảng!
+                      </h4>
+                      <p className="text-xs text-emerald-800 mt-0.5">
+                        Tỷ lệ xem đạt yêu cầu (≥ 95%). Đề thi trắc nghiệm đã được mở khóa. Hãy làm bài ngay để ghi nhận điểm.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('quiz');
+                      setVideoFinishedNotice(false);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all flex-shrink-0 cursor-pointer"
+                  >
+                    <span>Làm bài kiểm tra ngay</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <VideoPlayer
                 key={activeLesson._id}
                 lessonId={activeLesson._id}
@@ -235,7 +327,7 @@ export const LessonLearnPage: React.FC = () => {
                 {isQuizUnlocked && (
                   <button
                     onClick={() => setActiveTab('quiz')}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all flex-shrink-0"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all flex-shrink-0 cursor-pointer"
                   >
                     <span>Làm bài kiểm tra ngay</span>
                     <ChevronRight className="w-4 h-4" />
@@ -252,6 +344,39 @@ export const LessonLearnPage: React.FC = () => {
               onBackToVideo={() => setActiveTab('video')}
             />
           )}
+
+          {/* Thanh điều hướng Chuyển bài học (Prev / Next) */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center justify-between gap-4">
+            {prevLesson ? (
+              <button
+                onClick={() => handleSelectLesson(prevLesson._id)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Bài trước:</span> Bài {prevLesson.order}
+              </button>
+            ) : (
+              <div />
+            )}
+
+            {nextLesson ? (
+              <button
+                onClick={() => handleSelectLesson(nextLesson._id)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <span>Bài tiếp theo: Bài {nextLesson.order}</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <Link
+                to="/courses"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors"
+              >
+                <span>Xem danh sách học phần</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* CỘT PHẢI: Danh sách các bài giảng (Sidebar Khan Academy) (4 cột) */}
@@ -261,13 +386,24 @@ export const LessonLearnPage: React.FC = () => {
           }`}
         >
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 className="font-bold text-slate-900 text-base">Danh Sách Bài Học</h2>
-            <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
-              {lessons.filter((l) => l.progress.passed).length}/{lessons.length} bài đạt
+            <div>
+              <h2 className="font-bold text-slate-900 text-base">Nội Dung Khóa Học</h2>
+              <span className="text-xs text-slate-500">Chuẩn chương trình GDQP&AN</span>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full">
+              {passedLessonsCount}/{lessons.length} bài đạt
             </span>
           </div>
 
-          <div className="space-y-2.5">
+          {/* Mini Progress Bar trong Sidebar */}
+          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${isCourseAllPassed ? 'bg-emerald-600' : 'bg-blue-600'}`}
+              style={{ width: `${courseProgressPercent}%` }}
+            />
+          </div>
+
+          <div className="space-y-2.5 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
             {lessons.map((lesson) => {
               const isActive = lesson._id === activeLesson._id;
               const { passed, highestScore, status, coveragePercent } = lesson.progress;
@@ -275,14 +411,10 @@ export const LessonLearnPage: React.FC = () => {
               return (
                 <div
                   key={lesson._id}
-                  onClick={() => {
-                    setActiveLessonId(lesson._id);
-                    setActiveTab('video');
-                    setSidebarOpen(false);
-                  }}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  onClick={() => handleSelectLesson(lesson._id)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
                     isActive
-                      ? 'border-blue-600 bg-blue-50/50 shadow-sm'
+                      ? 'border-blue-600 bg-blue-50/50 shadow-sm ring-1 ring-blue-600'
                       : 'border-slate-100 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
@@ -297,30 +429,30 @@ export const LessonLearnPage: React.FC = () => {
 
                     {/* Badge trạng thái */}
                     {passed ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                         <CheckCircle2 className="w-3 h-3" /> ĐẠT ({highestScore}/10)
                       </span>
                     ) : status === 'FAILED' ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                         <XCircle className="w-3 h-3" /> Chưa đạt ({highestScore}/10)
                       </span>
                     ) : status === 'QUIZ_UNLOCKED' ? (
-                      <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                         Sẵn sàng thi
                       </span>
                     ) : status === 'WATCHING' ? (
-                      <span className="text-xs font-medium text-blue-600 bg-blue-100/60 px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] font-medium text-blue-600 bg-blue-100/60 px-2 py-0.5 rounded-full">
                         Đang xem {coveragePercent}%
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                         Chưa học
                       </span>
                     )}
                   </div>
 
                   <h3
-                    className={`text-sm font-semibold leading-snug line-clamp-2 ${
+                    className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 ${
                       isActive ? 'text-slate-900 font-bold' : 'text-slate-700'
                     }`}
                   >

@@ -1,15 +1,71 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { LessonProgress } from '../models/LessonProgress.model.js';
+import { Enrollment } from '../models/Enrollment.model.js';
 import { VideoService } from '../services/video.service.js';
 import { QuizService } from '../services/quiz.service.js';
 import { StorageService } from '../services/storage.service.js';
 
 export class StudentController {
-  static async getCourses(_req: Request, res: Response): Promise<void> {
+  static async getCourses(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.userId;
     const courses = await Course.find({ active: true }).sort({ code: 1 }).lean();
-    res.json({ success: true, data: courses });
+    if (!courses.length) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
+    const courseIds = courses.map((c) => c._id);
+    const [lessonCounts, passedProgresses, enrollments] = await Promise.all([
+      Lesson.aggregate([
+        { $match: { courseId: { $in: courseIds }, active: true } },
+        { $group: { _id: '$courseId', count: { $sum: 1 } } },
+      ]),
+      userId
+        ? LessonProgress.aggregate([
+            {
+              $match: {
+                userId: new mongoose.Types.ObjectId(userId),
+                courseId: { $in: courseIds },
+                passed: true,
+              },
+            },
+            { $group: { _id: '$courseId', count: { $sum: 1 } } },
+          ])
+        : Promise.resolve([]),
+      userId
+        ? Enrollment.find({ userId, courseId: { $in: courseIds } }).lean()
+        : Promise.resolve([]),
+    ]);
+
+    const totalLessonsMap = new Map(lessonCounts.map((l) => [l._id.toString(), l.count]));
+    const passedCountMap = new Map(passedProgresses.map((p) => [p._id.toString(), p.count]));
+    const enrollmentMap = new Map(enrollments.map((e) => [e.courseId.toString(), e]));
+
+    const enrichedCourses = courses.map((c) => {
+      const cIdStr = c._id.toString();
+      const totalLessons = totalLessonsMap.get(cIdStr) || 0;
+      const passedLessonsCount = passedCountMap.get(cIdStr) || 0;
+      const enrollment = enrollmentMap.get(cIdStr);
+      const allPassed = Boolean(
+        enrollment?.allPassed || (totalLessons > 0 && passedLessonsCount >= totalLessons)
+      );
+      const progressPercent =
+        totalLessons > 0 ? Math.round((passedLessonsCount / totalLessons) * 100) : 0;
+
+      return {
+        ...c,
+        totalLessons,
+        passedLessonsCount,
+        allPassed,
+        progressPercent,
+        completedAt: enrollment?.completedAt,
+      };
+    });
+
+    res.json({ success: true, data: enrichedCourses });
   }
 
   static async getCourseLessons(req: Request, res: Response): Promise<void> {

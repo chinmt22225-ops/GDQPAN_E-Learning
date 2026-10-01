@@ -18,6 +18,10 @@ node_modules/
 *.flv
 *.wmv
 *.webm
+*.rar
+*.zip
+*.7z
+*.tar.gz
 public/video.mp4
 public/*.mp4
 

@@ -19,3 +19,11 @@ export interface IEnrollment {
   completedAt?: string | Date;
   updatedAt: string | Date;
 }
+
+export interface IStudentCourseWithProgress extends ICourse {
+  passedLessonsCount: number;
+  allPassed: boolean;
+  progressPercent: number;
+  completedAt?: string | Date;
+}
+

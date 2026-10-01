@@ -19,6 +19,45 @@ export class AdminController {
       { $group: { _id: null, totalAttempts: { $sum: '$attemptsCount' } } },
     ]);
 
+    // Thống kê chi tiết tiến độ từng bài học
+    const lessons = await Lesson.find({ active: true })
+      .sort({ order: 1 })
+      .populate('courseId', 'code title')
+      .lean();
+
+    const lessonProgressStats = await LessonProgress.aggregate([
+      {
+        $group: {
+          _id: '$lessonId',
+          passedCount: { $sum: { $cond: [{ $eq: ['$passed', true] }, 1, 0] } },
+          watchingCount: { $sum: { $cond: [{ $eq: ['$status', 'WATCHING'] }, 1, 0] } },
+          totalAttempts: { $sum: '$attemptsCount' },
+          avgHighestScore: { $avg: '$highestScore' },
+        },
+      },
+    ]);
+
+    const statMap = new Map(lessonProgressStats.map((s) => [s._id.toString(), s]));
+
+    const lessonStats = lessons.map((l) => {
+      const s = statMap.get(l._id.toString());
+      const passedCount = s?.passedCount || 0;
+      const passRate = totalStudents > 0 ? Math.round((passedCount / totalStudents) * 100) : 0;
+      const course = l.courseId as unknown as { code?: string; title?: string } | null;
+
+      return {
+        lessonId: l._id.toString(),
+        title: l.title,
+        order: l.order,
+        courseCode: course?.code || '',
+        courseTitle: course?.title || '',
+        passedCount,
+        totalAttempts: s?.totalAttempts || 0,
+        passRate,
+        avgScore: s ? Math.round((s.avgHighestScore || 0) * 10) / 10 : 0,
+      };
+    });
+
     res.json({
       success: true,
       data: {
@@ -27,6 +66,7 @@ export class AdminController {
         totalPassedStudents,
         passRate: totalStudents > 0 ? Math.round((totalPassedStudents / totalStudents) * 100) : 0,
         totalAttempts: totalQuizAttempts[0]?.totalAttempts || 0,
+        lessonStats,
       },
     });
   }
