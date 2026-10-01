@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiRequest } from '../api/client.js';
 import { IQuizQuestionForStudent, QuizResultResponse } from '@elearning/shared';
-import { CheckCircle2, XCircle, RotateCcw, Award, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, XCircle, RotateCcw, Award, AlertCircle, ArrowRight, Clock } from 'lucide-react';
 
 interface QuizViewProps {
   lessonId: string;
@@ -10,6 +10,8 @@ interface QuizViewProps {
   onSuccess: () => void;
   onBackToVideo: () => void;
 }
+
+const DEFAULT_QUIZ_DURATION = 15 * 60; // 15 phút (900 giây)
 
 export const QuizView: React.FC<QuizViewProps> = ({
   lessonId,
@@ -24,12 +26,24 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [result, setResult] = useState<QuizResultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(DEFAULT_QUIZ_DURATION);
+  const answersRef = useRef<Record<string, string>>({});
+
+  // Cập nhật ref để auto-submit luôn đọc giá trị câu trả lời mới nhất
+  answersRef.current = answers;
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const loadQuestions = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
     setAnswers({});
+    setTimeLeft(DEFAULT_QUIZ_DURATION);
 
     try {
       const res = await apiRequest<IQuizQuestionForStudent[]>(
@@ -48,6 +62,49 @@ export const QuizView: React.FC<QuizViewProps> = ({
   useEffect(() => {
     loadQuestions();
   }, [lessonId]);
+
+  // Bộ đếm thời gian thi (15 phút)
+  useEffect(() => {
+    if (loading || result || !!error || questions.length === 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          triggerAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loading, result, error, questions.length]);
+
+  const triggerAutoSubmit = async () => {
+    if (submitting || result) return;
+    setSubmitting(true);
+    try {
+      const res = await apiRequest<QuizResultResponse>(
+        `/api/student/lessons/${lessonId}/quiz/submit`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ answers: answersRef.current }),
+        }
+      );
+
+      if (res.success && res.data) {
+        setResult(res.data);
+        if (res.data.passed) {
+          onSuccess();
+        }
+      }
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Đã hết thời gian làm bài.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSelectChoice = (questionId: string, choiceId: string) => {
     if (result) return; // Không cho sửa khi đã nộp
@@ -280,13 +337,29 @@ export const QuizView: React.FC<QuizViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Bộ đếm thời gian thi (15:00) */}
+          <div
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-sm font-bold shadow-xs transition-colors ${
+              timeLeft <= 120
+                ? 'bg-red-50 text-red-700 border-red-300 animate-pulse'
+                : timeLeft <= 300
+                ? 'bg-amber-50 text-amber-700 border-amber-300'
+                : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}
+            title="Thời gian làm bài còn lại"
+          >
+            <Clock className={`w-4 h-4 ${timeLeft <= 120 ? 'text-red-600' : 'text-blue-600'}`} />
+            <span className="font-mono">{formatTime(timeLeft)}</span>
+          </div>
+
           <div className="text-right">
-            <span className="text-xs text-slate-400 block font-medium">Tiến độ làm bài</span>
+            <span className="text-xs text-slate-400 block font-medium">Tiến độ</span>
             <span className="text-sm font-bold text-blue-700">
               {answeredCount}/{questions.length} câu
             </span>
           </div>
+
           <button
             onClick={handleSubmit}
             disabled={submitting || answeredCount < questions.length}
@@ -301,6 +374,19 @@ export const QuizView: React.FC<QuizViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Cảnh báo khi thời gian dưới 2 phút */}
+      {timeLeft <= 120 && (
+        <div className="p-3.5 bg-red-50 border border-red-300 rounded-2xl text-xs sm:text-sm text-red-900 font-semibold flex items-center justify-between animate-pulse">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+            Thời gian làm bài sắp hết! Hệ thống sẽ tự động thu bài khi đồng hồ về 00:00.
+          </span>
+          <span className="font-mono font-bold text-red-700 bg-white px-2 py-0.5 rounded-lg border border-red-200">
+            {formatTime(timeLeft)}
+          </span>
+        </div>
+      )}
 
       {/* Danh sách 10 câu hỏi */}
       <div className="space-y-5">

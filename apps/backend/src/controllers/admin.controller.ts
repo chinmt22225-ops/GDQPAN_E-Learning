@@ -502,4 +502,58 @@ export class AdminController {
     }
     res.json({ success: true, message: 'Đã xóa câu hỏi khỏi ngân hàng đề.' });
   }
+
+  static async importQuestions(req: Request, res: Response): Promise<void> {
+    const { lessonId } = req.params;
+    if (!req.body || !Buffer.isBuffer(req.body)) {
+      res.status(400).json({ success: false, message: 'Vui lòng cung cấp file Excel hợp lệ.' });
+      return;
+    }
+
+    try {
+      const result = await ExcelService.importQuestionsFromBuffer(lessonId, req.body);
+      res.json({
+        success: true,
+        message: `Đã nạp thành công ${result.imported}/${result.total} câu hỏi vào ngân hàng đề.`,
+        data: result,
+      });
+    } catch (err: unknown) {
+      res.status(400).json({ success: false, message: (err as Error).message });
+    }
+  }
+
+  static async exportQuestions(req: Request, res: Response): Promise<void> {
+    const { lessonId } = req.params;
+    try {
+      const buffer = await ExcelService.exportQuestionsToBuffer(lessonId);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Ngan_Hang_Cau_Hoi_Bai_${lessonId}.xlsx"`
+      );
+      res.send(buffer);
+    } catch (err: unknown) {
+      res.status(500).json({ success: false, message: (err as Error).message });
+    }
+  }
+
+  static async getQuestionTemplate(_req: Request, res: Response): Promise<void> {
+    try {
+      const buffer = await ExcelService.generateQuestionTemplateBuffer();
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="Mau_Nap_Cau_Hoi_GDQPAN.xlsx"'
+      );
+      res.send(buffer);
+    } catch (err: unknown) {
+      res.status(500).json({ success: false, message: (err as Error).message });
+    }
+  }
 }

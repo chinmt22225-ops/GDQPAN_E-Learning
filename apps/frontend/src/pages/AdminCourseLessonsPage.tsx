@@ -20,6 +20,9 @@ import {
   Check,
   UploadCloud,
   Film,
+  Upload,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 
 interface LessonAdminItem {
@@ -105,6 +108,12 @@ export const AdminCourseLessonsPage: React.FC = () => {
   });
   const [savingQuestion, setSavingQuestion] = useState<boolean>(false);
   const [questionFormError, setQuestionFormError] = useState<string | null>(null);
+
+  // Question Import Excel State
+  const [isQuestionImportModalOpen, setIsQuestionImportModalOpen] = useState<boolean>(false);
+  const [questionImportFile, setQuestionImportFile] = useState<File | null>(null);
+  const [questionImporting, setQuestionImporting] = useState<boolean>(false);
+  const [questionImportMessage, setQuestionImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Video Upload & Management Modal State
   const [videoModalLesson, setVideoModalLesson] = useState<LessonAdminItem | null>(null);
@@ -513,6 +522,47 @@ export const AdminCourseLessonsPage: React.FC = () => {
       }
     } catch (err: unknown) {
       alert((err as Error).message || 'Lỗi khi xóa câu hỏi.');
+    }
+  };
+
+  // Nạp câu hỏi từ file Excel (.xlsx)
+  const handleImportQuestionsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLessonForQuestions || !questionImportFile) return;
+
+    setQuestionImporting(true);
+    setQuestionImportMessage(null);
+
+    try {
+      const arrayBuffer = await questionImportFile.arrayBuffer();
+      const res = await fetch(`/api/admin/lessons/${selectedLessonForQuestions._id}/questions/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+        body: arrayBuffer,
+        credentials: 'include',
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || 'Lỗi khi nạp file câu hỏi Excel.');
+      }
+
+      setQuestionImportMessage({
+        type: 'success',
+        text: json.message || 'Đã nạp thành công câu hỏi vào ngân hàng đề!',
+      });
+      setQuestionImportFile(null);
+      fetchQuestions(selectedLessonForQuestions._id);
+      fetchLessons();
+    } catch (err: unknown) {
+      setQuestionImportMessage({
+        type: 'error',
+        text: (err as Error).message || 'Lỗi khi nạp file câu hỏi Excel.',
+      });
+    } finally {
+      setQuestionImporting(false);
     }
   };
 
@@ -1055,30 +1105,63 @@ export const AdminCourseLessonsPage: React.FC = () => {
 
             {/* Actions Bar */}
             <div className="bg-white px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={handleOpenCreateQuestion}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Soạn Câu Hỏi Mới</span>
+                  <span>Soạn Câu Hỏi</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setQuestionImportFile(null);
+                    setQuestionImportMessage(null);
+                    setIsQuestionImportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+                  title="Nạp danh sách câu hỏi trắc nghiệm từ file Excel"
+                >
+                  <Upload className="w-4 h-4 text-emerald-700" />
+                  <span>Nhập từ Excel</span>
+                </button>
+
+                <a
+                  href={`/api/admin/lessons/${selectedLessonForQuestions._id}/questions/export.xlsx`}
+                  download
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors"
+                  title="Xuất toàn bộ câu hỏi của bài học này ra file Excel (.xlsx)"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-slate-600" />
+                  <span>Xuất Excel</span>
+                </a>
+
+                <a
+                  href="/api/admin/questions/template.xlsx"
+                  download
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 border border-transparent rounded-xl text-xs font-semibold transition-colors"
+                  title="Tải file mẫu Excel chuẩn để soạn câu hỏi"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Tải mẫu Excel</span>
+                </a>
 
                 <button
                   onClick={handleSeedSampleQuestions}
                   disabled={questionsLoading}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
                   title="Nạp nhanh 10 câu hỏi lý thuyết GDQP&AN mẫu chuẩn có giải thích"
                 >
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span>Nạp 10 câu hỏi mẫu GDQP&AN</span>
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Nạp 10 câu mẫu</span>
                 </button>
               </div>
 
               {questions.length < (selectedLessonForQuestions.totalQuestionsPerQuiz || 10) && (
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1 rounded-lg">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                  Cần tối thiểu {selectedLessonForQuestions.totalQuestionsPerQuiz || 10} câu để sinh viên bắt đầu thi
+                  Cần tối thiểu {selectedLessonForQuestions.totalQuestionsPerQuiz || 10} câu để sinh viên bắt đầu thi (Hiện có {questions.length} câu)
                 </span>
               )}
             </div>
@@ -1321,6 +1404,125 @@ export const AdminCourseLessonsPage: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL NẠP CÂU HỎI TRẮC NGHIỆM TỪ FILE EXCEL (PHASE 3) */}
+      {/* ========================================================================= */}
+      {isQuestionImportModalOpen && selectedLessonForQuestions && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-5">
+              <div>
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider block">
+                  Nhập Ngân Hàng Câu Hỏi Từ Excel
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 line-clamp-1">
+                  {selectedLessonForQuestions.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsQuestionImportModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Hướng dẫn cấu trúc cột */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-4 text-xs text-slate-700 space-y-1.5">
+              <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                Cấu trúc các cột trong file Excel (.xlsx):
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5 text-slate-600 text-[11px]">
+                <li><strong>Cột A:</strong> Nội dung câu hỏi trắc nghiệm</li>
+                <li><strong>Cột B, C, D, E:</strong> Phương án lựa chọn A, B, C, D</li>
+                <li><strong>Cột F:</strong> Đáp án đúng (Ghi <strong>A</strong>, <strong>B</strong>, <strong>C</strong> hoặc <strong>D</strong>)</li>
+                <li><strong>Cột G:</strong> Lời giải thích chi tiết cho sinh viên khi làm sai (tùy chọn)</li>
+              </ul>
+              <div className="pt-1.5 flex items-center justify-between border-t border-slate-200/80">
+                <span className="text-[11px] text-slate-500">Chưa có file mẫu?</span>
+                <a
+                  href="/api/admin/questions/template.xlsx"
+                  download
+                  className="text-[11px] text-blue-700 hover:text-blue-800 font-bold inline-flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Tải file mẫu Excel chuẩn GDQP&AN (.xlsx)
+                </a>
+              </div>
+            </div>
+
+            {questionImportMessage && (
+              <div
+                className={`p-3.5 mb-4 rounded-xl text-xs font-semibold border ${
+                  questionImportMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+              >
+                {questionImportMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleImportQuestionsSubmit} className="space-y-4">
+              <div className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center transition-colors bg-slate-50/50">
+                <UploadCloud className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-800 mb-1">
+                  Chọn file Excel chứa câu hỏi từ máy tính
+                </p>
+                <p className="text-xs text-slate-500 mb-4">
+                  Hỗ trợ định dạng .xlsx hoặc .xls (Tối đa 10MB)
+                </p>
+
+                <input
+                  type="file"
+                  id="questionExcelFileInput"
+                  accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setQuestionImportFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="questionExcelFileInput"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <span>Duyệt file Excel...</span>
+                </label>
+
+                {questionImportFile && (
+                  <div className="mt-3 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>{questionImportFile.name} ({(questionImportFile.size / 1024).toFixed(1)} KB)</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsQuestionImportModalOpen(false)}
+                  disabled={questionImporting}
+                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={questionImporting || !questionImportFile}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-bold shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{questionImporting ? 'Đang nạp câu hỏi...' : 'Bắt đầu nạp vào ngân hàng'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

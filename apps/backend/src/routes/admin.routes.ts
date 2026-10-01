@@ -36,7 +36,14 @@ router.delete('/lessons/:lessonId', AdminController.deleteLesson);
 router.post('/lessons/:lessonId/video', videoUploadMiddleware.single('video'), AdminController.uploadLessonVideo);
 
 // Quản lý Ngân hàng Câu hỏi (Questions)
+router.get('/questions/template.xlsx', AdminController.getQuestionTemplate);
 router.get('/lessons/:lessonId/questions', AdminController.getQuestionsByLesson);
+router.get('/lessons/:lessonId/questions/export.xlsx', AdminController.exportQuestions);
+router.post(
+  '/lessons/:lessonId/questions/import',
+  express.raw({ type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'], limit: '10mb' }),
+  AdminController.importQuestions
+);
 router.post('/lessons/:lessonId/questions', AdminController.createQuestion);
 router.put('/questions/:questionId', AdminController.updateQuestion);
 router.delete('/questions/:questionId', AdminController.deleteQuestion);

@@ -47,6 +47,8 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+*.crdownload
+*.tmp
 
 # Temporary & cache folders
 tmp/

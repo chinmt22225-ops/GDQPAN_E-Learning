@@ -8,10 +8,27 @@ import { sseService } from './sse.service.js';
 import { IQuizQuestionForStudent, QuizDetailedFeedback, QuizResultResponse } from '@elearning/shared';
 
 export class QuizService {
-  static async getQuizQuestions(lessonId: string): Promise<IQuizQuestionForStudent[]> {
+  static async getQuizQuestions(
+    userId: string,
+    lessonId: string,
+    isAdmin = false
+  ): Promise<IQuizQuestionForStudent[]> {
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) {
       throw new Error('Bài học không tồn tại.');
+    }
+
+    // Kiểm soát điều kiện tiên quyết: Phải xem video đạt yêu cầu mới được làm bài thi (chống bypass API)
+    if (!isAdmin) {
+      const progress = await LessonProgress.findOne({ userId, lessonId });
+      const minCoverage = lesson.minCoveragePercent || 0.95;
+      const isVideoDone = progress?.videoCompleted || (progress?.coveragePercent || 0) >= minCoverage;
+      if (!isVideoDone) {
+        const currentPercent = progress ? Math.round(progress.coveragePercent * 100) : 0;
+        throw new Error(
+          `Bạn cần hoàn thành xem video bài giảng (đạt ≥ ${Math.round(minCoverage * 100)}%) trước khi làm bài thi trắc nghiệm. Tiến độ hiện tại của bạn: ${currentPercent}%.`
+        );
+      }
     }
 
     const quizSize = lesson.totalQuestionsPerQuiz || 10;
@@ -25,6 +42,12 @@ export class QuizService {
 
     if (questions.length === 0) {
       throw new Error('Ngân hàng câu hỏi của bài học này đang được cập nhật.');
+    }
+
+    // Thuật toán Fisher-Yates xáo trộn thứ tự các câu hỏi để mỗi lượt thi là độc lập
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
     }
 
     return questions.map((q) => ({

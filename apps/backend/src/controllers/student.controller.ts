@@ -68,10 +68,12 @@ export class StudentController {
   }
 
   static async getQuiz(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.userId;
     const lessonId = req.params.lessonId;
+    const isAdmin = req.user?.role === 'admin';
 
     try {
-      const questions = await QuizService.getQuizQuestions(lessonId);
+      const questions = await QuizService.getQuizQuestions(userId, lessonId, isAdmin);
       res.json({ success: true, data: questions });
     } catch (err: unknown) {
       res.status(400).json({ success: false, message: (err as Error).message });
