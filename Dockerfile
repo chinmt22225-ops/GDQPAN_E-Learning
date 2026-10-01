@@ -2,34 +2,28 @@
 # DOCKERFILE CHO PHIÊN BẢN GỘP FULLSTACK E-LEARNING GDQP&AN
 # ====================================================================
 
-# GIAI ĐOẠN 1: Build mã nguồn (Frontend + Backend + Shared)
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Sao chép manifest các packages
-COPY package*.json ./
-COPY packages/shared/package*.json ./packages/shared/
-COPY apps/backend/package*.json ./apps/backend/
-COPY apps/frontend/package*.json ./apps/frontend/
-COPY tsconfig.base.json ./
-COPY packages/shared/tsconfig.json ./packages/shared/
-COPY apps/backend/tsconfig.json ./apps/backend/
-COPY apps/frontend/tsconfig*.json ./apps/frontend/
-COPY apps/frontend/vite.config.ts ./apps/frontend/
+# 1. Sao chép các tệp cấu hình package & tsconfig
+COPY package*.json tsconfig*.json ./
+COPY packages/shared/package*.json packages/shared/tsconfig*.json ./packages/shared/
+COPY apps/backend/package*.json apps/backend/tsconfig*.json ./apps/backend/
+COPY apps/frontend/package*.json apps/frontend/tsconfig*.json apps/frontend/vite.config.ts ./apps/frontend/
 
-# Cài đặt toàn bộ dependencies để build
+# 2. Cài đặt dependencies
 RUN npm ci
 
-# Sao chép mã nguồn
+# 3. Sao chép mã nguồn các module
 COPY packages/shared ./packages/shared
 COPY apps/backend ./apps/backend
 COPY apps/frontend ./apps/frontend
 
-# Biên dịch toàn bộ các workspace
+# 4. Build toàn bộ (shared, backend, frontend)
 RUN npm run build --workspaces
 
-# GIAI ĐOẠN 2: Runner phục vụ môi trường Production / Demo
+# --- RUNNER STAGE ---
 FROM node:20-alpine AS runner
 
 WORKDIR /app
@@ -37,20 +31,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 
-# Cài đặt dependencies production
-COPY package*.json ./
-COPY packages/shared/package*.json ./packages/shared/
-COPY apps/backend/package*.json ./apps/backend/
-COPY apps/frontend/package*.json ./apps/frontend/
+# Cài đặt ffmpeg để hỗ trợ quét độ dài video tự động trong Docker
+RUN apk add --no-cache ffmpeg
 
-RUN npm ci --omit=dev
+# Sao chép mã nguồn đã build & dependencies từ builder
+COPY --from=builder /app ./
 
-# Sao chép artifacts đã build
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
-COPY --from=builder /app/apps/frontend/dist ./apps/frontend/dist
-
-# Tạo sẵn thư mục lưu trữ video bài giảng
+# Đảm bảo thư mục uploads tồn tại
 RUN mkdir -p /app/apps/backend/uploads/videos /app/apps/backend/uploads/contest_videos
 
 EXPOSE 4000
