@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield, LogOut, User, BookOpen, LayoutDashboard, Users, Video } from 'lucide-react';
+import { Shield, LogOut, User, BookOpen, LayoutDashboard, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 
 export const Navbar: React.FC = () => {
@@ -63,13 +63,6 @@ export const Navbar: React.FC = () => {
                     >
                       <Users className="w-4 h-4" />
                       <span className="hidden sm:inline">Sinh viên</span>
-                    </Link>
-                    <Link
-                      to="/admin/contest-judging"
-                      className="flex items-center gap-1.5 text-sm font-semibold text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-lg bg-amber-950/40 border border-amber-500/30 hover:bg-amber-900/50 transition-colors"
-                    >
-                      <Video className="w-4 h-4 text-amber-400" />
-                      <span className="hidden sm:inline">Chấm Thi Video</span>
                     </Link>
                   </>
                 )}
