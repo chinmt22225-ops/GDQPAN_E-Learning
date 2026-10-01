@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "start": "npm run start --workspace=@elearning/backend",
+    "demo": "node apps/backend/dist/server.js",
     "dev:backend": "npm run dev --workspace=@elearning/backend",
     "dev:frontend": "npm run dev --workspace=@elearning/frontend",
     "dev": "npm run dev:backend",

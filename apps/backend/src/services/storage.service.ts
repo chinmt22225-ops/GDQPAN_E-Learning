@@ -4,12 +4,23 @@ import { execSync } from 'child_process';
 import { Request, Response } from 'express';
 import multer from 'multer';
 
-const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'videos');
+// Tìm thư mục uploads/videos hợp lệ
+const getUploadDir = (): string => {
+  const candidates = [
+    path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'videos'),
+    path.resolve(process.cwd(), 'uploads', 'videos'),
+    path.resolve(__dirname, '../../uploads/videos'),
+    path.resolve(__dirname, '../uploads/videos'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  const fallback = path.resolve(process.cwd(), 'uploads', 'videos');
+  if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+};
 
-// Đảm bảo thư mục lưu trữ video tồn tại
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const UPLOAD_DIR = getUploadDir();
 
 // Cấu hình Multer để upload video
 const storage = multer.diskStorage({
@@ -67,29 +78,40 @@ export class StorageService {
       return;
     }
 
-    let filePath = path.join(UPLOAD_DIR, videoKey);
-    const contestDir = path.resolve(process.cwd(), 'uploads', 'contest_videos');
-    if (!fs.existsSync(filePath)) {
-      const contestPath = path.join(contestDir, videoKey);
-      if (fs.existsSync(contestPath)) {
-        filePath = contestPath;
-      }
-    }
+    const candidateDirs = [
+      UPLOAD_DIR,
+      path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'videos'),
+      path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'contest_videos'),
+      path.resolve(process.cwd(), 'uploads', 'videos'),
+      path.resolve(process.cwd(), 'uploads', 'contest_videos'),
+      path.resolve(process.cwd(), 'VIDEO'),
+      path.resolve(__dirname, '../../uploads/videos'),
+      path.resolve(__dirname, '../../uploads/contest_videos'),
+      path.resolve(__dirname, '../uploads/videos'),
+      path.resolve(__dirname, '../uploads/contest_videos'),
+      path.resolve(__dirname, '../../../VIDEO'),
+    ];
 
-    if (!fs.existsSync(filePath)) {
-      // Thử decodeURI nếu tên file chứa ký tự đặc biệt
+    let filePath: string | null = null;
+    for (const dir of candidateDirs) {
+      const p1 = path.join(dir, videoKey);
+      if (fs.existsSync(p1)) {
+        filePath = p1;
+        break;
+      }
       try {
         const decodedKey = decodeURIComponent(videoKey);
-        const contestPathDecoded = path.join(contestDir, decodedKey);
-        if (fs.existsSync(contestPathDecoded)) {
-          filePath = contestPathDecoded;
+        const p2 = path.join(dir, decodedKey);
+        if (fs.existsSync(p2)) {
+          filePath = p2;
+          break;
         }
       } catch {
-        // ignore error
+        // ignore
       }
     }
 
-    if (!fs.existsSync(filePath)) {
+    if (!filePath || !fs.existsSync(filePath)) {
       // Nếu file local không tìm thấy, fallback sang video mẫu demo
       res.redirect('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
       return;

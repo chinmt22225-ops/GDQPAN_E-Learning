@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -11,12 +13,19 @@ import { User, normalizeVietnamese } from './models/User.model.js';
 import { Course } from './models/Course.model.js';
 import { Lesson } from './models/Lesson.model.js';
 import { Question } from './models/Question.model.js';
+import { Enrollment } from './models/Enrollment.model.js';
 import { AuthService } from './services/auth.service.js';
 
 const app = express();
 
 // 1. Bảo mật & Middleware cơ bản
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -30,6 +39,7 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(cookieParser());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
@@ -42,13 +52,59 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// 3. Khai báo các Routes
+// 3. Khai báo các Routes API
 app.use('/api', apiRoutes);
 
-// 4. Seed dữ liệu khởi tạo (Admin mặc định & Bài học mẫu nếu DB rỗng)
+// 4. Phục vụ tĩnh thư mục uploads (nếu cần phát video/ảnh trực tiếp)
+const uploadDirCandidates = [
+  path.resolve(process.cwd(), 'apps', 'backend', 'uploads'),
+  path.resolve(process.cwd(), 'uploads'),
+  path.resolve(__dirname, '../../uploads'),
+  path.resolve(__dirname, '../uploads'),
+];
+
+for (const uPath of uploadDirCandidates) {
+  if (fs.existsSync(uPath)) {
+    app.use('/uploads', express.static(uPath));
+    break;
+  }
+}
+
+// 5. Gộp Frontend vào Backend (Phục vụ SPA Single Page Application)
+const frontendDistCandidates = [
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(process.cwd(), 'apps', 'frontend', 'dist'),
+  path.resolve(process.cwd(), 'frontend', 'dist'),
+  path.resolve(process.cwd(), 'dist', 'public'),
+  path.resolve(__dirname, '../public'),
+];
+
+let frontendDistPath: string | null = null;
+for (const candidate of frontendDistCandidates) {
+  if (fs.existsSync(path.join(candidate, 'index.html'))) {
+    frontendDistPath = candidate;
+    break;
+  }
+}
+
+if (frontendDistPath) {
+  app.use(express.static(frontendDistPath));
+
+  // SPA Fallback: Chuyển hướng mọi route không phải /api về index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath!, 'index.html'));
+  });
+} else {
+  console.log('ℹ️ Chưa phát hiện thư mục build Frontend (apps/frontend/dist). Chạy ở chế độ API độc lập.');
+}
+
+// 6. Seed dữ liệu khởi tạo (Admin mặc định, Sinh viên mẫu & Bài học mẫu nếu DB rỗng)
 async function seedInitialData() {
   try {
-    // 4.1. Tạo tài khoản Admin mặc định nếu chưa có
+    // 6.1. Tạo tài khoản Admin mặc định nếu chưa có
     const adminExists = await User.findOne({ role: 'admin' });
     if (!adminExists) {
       const defaultPassword = 'Admin@123456';
@@ -62,12 +118,44 @@ async function seedInitialData() {
         role: 'admin',
         isActive: true,
       });
-      console.log('✅ Đã khởi tạo tài khoản Admin mặc định:');
-      console.log('   Tài khoản: admin@gdqpan.edu.vn hoặc ADMIN01');
-      console.log('   Mật khẩu: Admin@123456');
+      console.log('✅ Đã khởi tạo tài khoản Admin mặc định: ADMIN01 / Admin@123456');
     }
 
-    // 4.2. Tạo Khóa học & Bài học mẫu nếu chưa có
+    // 6.2. Tạo tài khoản Sinh viên mẫu để demo nếu chưa có
+    let demoStudent = await User.findOne({ mssv: 'SV2026001' });
+    if (!demoStudent) {
+      const studentPassword = 'Sinhvien@123';
+      const studentHash = await AuthService.hashPassword(studentPassword);
+      demoStudent = await User.create({
+        mssv: 'SV2026001',
+        nameRaw: 'Nguyễn Văn An',
+        nameNormalized: normalizeVietnamese('Nguyễn Văn An'),
+        email: 'sinhvien@gdqpan.edu.vn',
+        phone: '0987654321',
+        school: 'Trường Đại học Bách Khoa',
+        class: 'QP01-K26',
+        passwordHash: studentHash,
+        role: 'student',
+        isActive: true,
+      });
+      console.log('✅ Đã khởi tạo tài khoản Sinh viên mẫu: SV2026001 / Sinhvien@123');
+    }
+
+    // 6.3. Đảm bảo sinh viên mẫu được ghi danh vào tất cả khóa học đang mở
+    const activeCourses = await Course.find({ active: true });
+    for (const c of activeCourses) {
+      const enrolled = await Enrollment.findOne({ userId: demoStudent._id, courseId: c._id });
+      if (!enrolled) {
+        await Enrollment.create({
+          userId: demoStudent._id,
+          courseId: c._id,
+          completedLessons: [],
+          allPassed: false,
+        });
+      }
+    }
+
+    // 6.4. Tạo Khóa học & Bài học mẫu nếu chưa có
     const courseCount = await Course.countDocuments();
     if (courseCount === 0) {
       const course = await Course.create({
@@ -75,6 +163,7 @@ async function seedInitialData() {
         title: 'Giáo Dục Quốc Phòng & An Ninh (Học Phần 1)',
         description: 'Đường lối quốc phòng và an ninh của Đảng Cộng sản Việt Nam',
         totalLessons: 2,
+        active: true,
       });
 
       const lesson1 = await Lesson.create({
@@ -84,6 +173,7 @@ async function seedInitialData() {
         videoDurationSeconds: 600, // 10 phút
         passScore: 8,
         totalQuestionsPerQuiz: 10,
+        active: true,
       });
 
       // Tạo 15 câu hỏi mẫu cho bài 1
@@ -112,15 +202,31 @@ async function seedInitialData() {
   }
 }
 
-// 5. Khởi động Server
+// 7. Khởi động Server Gộp Fullstack
 async function startServer() {
   await connectDatabase();
   getRedisClient(); // Khởi tạo kết nối Redis
   await seedInitialData();
 
   app.listen(ENV.PORT, () => {
-    console.log(`🚀 GDQP&AN E-Learning Backend API đang chạy tại: http://localhost:${ENV.PORT}`);
-    console.log(`👉 Kiểm tra trạng thái: http://localhost:${ENV.PORT}/api/health`);
+    console.log('\n' + '='.repeat(68));
+    console.log('🎓 HỆ THỐNG E-LEARNING GDQP&AN - PHIÊN BẢN GỘP FULLSTACK (DEMO)');
+    console.log('='.repeat(68));
+    console.log(`🌐 TRUY CẬP ỨNG DỤNG TẠI: http://localhost:${ENV.PORT}`);
+    console.log(`👉 API Health Check:     http://localhost:${ENV.PORT}/api/health`);
+    if (frontendDistPath) {
+      console.log(`📦 Tích hợp Frontend:    ĐÃ KÍCH HOẠT (phục vụ từ ${frontendDistPath})`);
+    } else {
+      console.log(`📦 Tích hợp Frontend:    Chưa build frontend (chạy npm run build trước)`);
+    }
+    console.log('-'.repeat(68));
+    console.log('🔑 TÀI KHOẢN QUẢN TRỊ VIÊN (ADMIN DEMO):');
+    console.log('   • Tên đăng nhập: ADMIN01  (hoặc admin@gdqpan.edu.vn)');
+    console.log('   • Mật khẩu:      Admin@123456');
+    console.log('🔑 TÀI KHOẢN SINH VIÊN (STUDENT DEMO):');
+    console.log('   • Tên đăng nhập: SV2026001 (hoặc sinhvien@gdqpan.edu.vn)');
+    console.log('   • Mật khẩu:      Sinhvien@123');
+    console.log('='.repeat(68) + '\n');
   });
 }
 

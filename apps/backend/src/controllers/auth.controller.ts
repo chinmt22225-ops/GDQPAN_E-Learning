@@ -4,7 +4,6 @@ import { Course } from '../models/Course.model.js';
 import { Enrollment } from '../models/Enrollment.model.js';
 import { AuthService } from '../services/auth.service.js';
 import { CaptchaService } from '../services/captcha.service.js';
-import { ENV } from '../config/env.config.js';
 
 export class AuthController {
   /**
@@ -133,7 +132,7 @@ export class AuthController {
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https'),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -187,7 +186,7 @@ export class AuthController {
 
       res.cookie('access_token', accessToken, {
         httpOnly: true,
-        secure: ENV.NODE_ENV === 'production',
+        secure: Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https'),
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
@@ -297,7 +296,7 @@ export class AuthController {
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https'),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -377,7 +376,7 @@ export class AuthController {
     // Thiết lập HttpOnly Cookie bảo mật
     res.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https'),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
