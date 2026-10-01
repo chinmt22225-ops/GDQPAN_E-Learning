@@ -53,7 +53,6 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/backend/uploads:/app/apps/backend/uploads
-      - ./VIDEO:/app/VIDEO
 
 volumes:
   mongo_demo_data:
