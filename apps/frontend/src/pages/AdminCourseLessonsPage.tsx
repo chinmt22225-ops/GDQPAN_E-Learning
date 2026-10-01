@@ -23,6 +23,8 @@ import {
   Upload,
   FileSpreadsheet,
   Download,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 
 interface LessonAdminItem {
@@ -122,8 +124,11 @@ export const AdminCourseLessonsPage: React.FC = () => {
   const [videoDurationInput, setVideoDurationInput] = useState<number>(15);
   const [videoUploading, setVideoUploading] = useState<boolean>(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
-  const [videoTab, setVideoTab] = useState<'upload' | 'url'>('upload');
+  const [videoTab, setVideoTab] = useState<'upload' | 'url' | 'server'>('upload');
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
+  const [serverVideos, setServerVideos] = useState<Array<{ filename: string; sizeMB: number; group: string }>>([]);
+  const [selectedServerVideo, setSelectedServerVideo] = useState<string>('');
+  const [loadingServerVideos, setLoadingServerVideos] = useState<boolean>(false);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== 'admin')) {
@@ -275,20 +280,31 @@ export const AdminCourseLessonsPage: React.FC = () => {
   // VIDEO MANAGEMENT HANDLERS (PHASE 2)
   // ============================================
 
+  const fetchServerVideos = async () => {
+    setLoadingServerVideos(true);
+    try {
+      const res = await apiRequest<Array<{ filename: string; sizeMB: number; group: string }>>('/api/admin/server-videos');
+      if (res.success && res.data) {
+        setServerVideos(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingServerVideos(false);
+    }
+  };
+
   const handleOpenVideoModal = (lesson: LessonAdminItem) => {
     setVideoModalLesson(lesson);
     setVideoFile(null);
     setVideoUrlInput(lesson.videoKey || '');
+    setSelectedServerVideo(lesson.videoKey || '');
     setVideoDurationInput(Math.round(lesson.videoDurationSeconds / 60) || 15);
     setVideoUploadProgress(0);
     setVideoUploading(false);
     setVideoUploadError(null);
-    setVideoTab(
-      lesson.videoKey &&
-        (lesson.videoKey.startsWith('http://') || lesson.videoKey.startsWith('https://'))
-        ? 'url'
-        : 'upload'
-    );
+    setVideoTab('upload');
+    fetchServerVideos();
   };
 
   const handleUploadVideoFile = () => {
@@ -326,19 +342,63 @@ export const AdminCourseLessonsPage: React.FC = () => {
       } else {
         try {
           const err = JSON.parse(xhr.responseText);
-          setVideoUploadError(err.message || 'Lỗi khi tải video lên máy chủ.');
+          const msg = err.message || 'Lỗi khi tải video lên máy chủ.';
+          setVideoUploadError(msg);
+          if (xhr.status === 401) {
+            alert('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại để tiếp tục tải video.');
+            navigate('/admin/login');
+          } else {
+            alert(`Lỗi tải video (${xhr.status}): ${msg}`);
+          }
         } catch {
-          setVideoUploadError('Lỗi khi tải video lên máy chủ.');
+          const msg = `Lỗi máy chủ (${xhr.status}) trong quá trình tải video. Vui lòng thử lại.`;
+          setVideoUploadError(msg);
+          alert(msg);
         }
       }
     };
 
     xhr.onerror = () => {
       setVideoUploading(false);
-      setVideoUploadError('Lỗi kết nối mạng trong quá trình upload video.');
+      const msg = 'Lỗi kết nối mạng trong quá trình upload video. Vui lòng kiểm tra lại kết nối.';
+      setVideoUploadError(msg);
+      alert(msg);
     };
 
     xhr.send(formData);
+  };
+
+  const handleSelectServerVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoModalLesson || !selectedServerVideo) {
+      setVideoUploadError('Vui lòng chọn một video từ danh sách.');
+      return;
+    }
+
+    setVideoUploading(true);
+    setVideoUploadError(null);
+
+    try {
+      const res = await apiRequest(`/api/admin/lessons/${videoModalLesson._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          videoKey: selectedServerVideo,
+          videoDurationSeconds: Number(videoDurationInput || 15) * 60,
+        }),
+      });
+
+      if (res.success) {
+        alert(`Đã cập nhật bài học với video: ${selectedServerVideo}`);
+        setVideoModalLesson(null);
+        fetchLessons();
+      } else {
+        setVideoUploadError(res.message || 'Không thể liên kết video.');
+      }
+    } catch (err: unknown) {
+      setVideoUploadError((err as Error).message || 'Đã xảy ra lỗi.');
+    } finally {
+      setVideoUploading(false);
+    }
   };
 
   const handleSaveVideoUrl = async (e: React.FormEvent) => {
@@ -1583,34 +1643,57 @@ export const AdminCourseLessonsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Chuyển đổi tab: Tải file lên VS Dán link Cloudflare R2 */}
-            <div className="flex border-b border-slate-200 mb-5">
+            {/* Chuyển đổi tab: Tải file lên VS Chọn từ 24 video có sẵn VS Dán link Cloudflare R2 */}
+            <div className="flex border-b border-slate-200 mb-5 text-xs sm:text-sm">
               <button
                 type="button"
-                onClick={() => setVideoTab('upload')}
-                className={`flex-1 py-2.5 text-xs sm:text-sm font-bold text-center border-b-2 transition-colors cursor-pointer ${
+                onClick={() => {
+                  setVideoTab('upload');
+                  setVideoUploadError(null);
+                }}
+                className={`flex-1 py-2.5 font-bold text-center border-b-2 transition-colors cursor-pointer ${
                   videoTab === 'upload'
                     ? 'border-blue-600 text-blue-700'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Tải file trực tiếp lên Server (Tối đa 500MB)
+                1. Tải file từ máy tính
               </button>
               <button
                 type="button"
-                onClick={() => setVideoTab('url')}
-                className={`flex-1 py-2.5 text-xs sm:text-sm font-bold text-center border-b-2 transition-colors cursor-pointer ${
+                onClick={() => {
+                  setVideoTab('server');
+                  setVideoUploadError(null);
+                  if (serverVideos.length === 0) {
+                    fetchServerVideos();
+                  }
+                }}
+                className={`flex-1 py-2.5 font-bold text-center border-b-2 transition-colors cursor-pointer ${
+                  videoTab === 'server'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                2. Chọn video có sẵn ({serverVideos.length > 0 ? serverVideos.length : '24 video'})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVideoTab('url');
+                  setVideoUploadError(null);
+                }}
+                className={`flex-1 py-2.5 font-bold text-center border-b-2 transition-colors cursor-pointer ${
                   videoTab === 'url'
                     ? 'border-blue-600 text-blue-700'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Dùng Link Cloudflare R2 / S3 / HLS (.m3u8)
+                3. Dùng Link R2 / S3 / HLS
               </button>
             </div>
 
             {/* Tab 1: Upload File */}
-            {videoTab === 'upload' ? (
+            {videoTab === 'upload' && (
               <div className="space-y-4">
                 <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center transition-colors bg-slate-50/50">
                   <UploadCloud className="w-10 h-10 text-blue-600 mx-auto mb-2" />
@@ -1628,6 +1711,7 @@ export const AdminCourseLessonsPage: React.FC = () => {
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         setVideoFile(e.target.files[0]);
+                        setVideoUploadError(null);
                       }
                     }}
                     className="hidden"
@@ -1679,12 +1763,20 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Thông báo lỗi upload hiển thị ngay cạnh nút Tải lên */}
+                {videoUploadError && (
+                  <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{videoUploadError}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setVideoModalLesson(null)}
                     disabled={videoUploading}
-                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                   >
                     Hủy bỏ
                   </button>
@@ -1699,8 +1791,96 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-            ) : (
-              /* Tab 2: URL R2 / S3 / HLS */
+            )}
+
+            {/* Tab 2: Chọn từ Video đã có sẵn trên máy chủ */}
+            {videoTab === 'server' && (
+              <form onSubmit={handleSelectServerVideo} className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-blue-900 text-xs">
+                  <p className="font-bold mb-1 flex items-center gap-1.5">
+                    <Film className="w-4 h-4 text-blue-700" />
+                    Kho 24 video bài giảng GDQP-AN trích xuất sẵn từ VIDEO.rar
+                  </p>
+                  <p className="text-blue-700 text-[11px]">
+                    Chọn nhanh video đã được lưu sẵn trên máy chủ mà không cần tốn thời gian tải lại từ máy tính.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Chọn video bài giảng *
+                  </label>
+                  {loadingServerVideos ? (
+                    <div className="p-4 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span>Đang tải danh sách video trên máy chủ...</span>
+                    </div>
+                  ) : serverVideos.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                      Không tìm thấy video nào trên máy chủ. Bạn có thể sử dụng tab Tải file từ máy tính.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedServerVideo}
+                      onChange={(e) => setSelectedServerVideo(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">-- Chọn video bài giảng ({serverVideos.length} file sẵn có) --</option>
+                      {serverVideos.map((v) => (
+                        <option key={v.filename} value={v.filename}>
+                          {v.filename} ({v.sizeMB} MB)
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Thời lượng video ước tính (phút)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={videoDurationInput}
+                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
+                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Hệ thống sẽ dựa vào thời lượng này để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
+                  </span>
+                </div>
+
+                {videoUploadError && (
+                  <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{videoUploadError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setVideoModalLesson(null)}
+                    disabled={videoUploading}
+                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={videoUploading || !selectedServerVideo}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{videoUploading ? 'Đang lưu...' : 'Gán video này cho bài học'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Tab 3: URL R2 / S3 / HLS */}
+            {videoTab === 'url' && (
               <form onSubmit={handleSaveVideoUrl} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -1732,12 +1912,19 @@ export const AdminCourseLessonsPage: React.FC = () => {
                   />
                 </div>
 
+                {videoUploadError && (
+                  <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{videoUploadError}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setVideoModalLesson(null)}
                     disabled={videoUploading}
-                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                   >
                     Hủy bỏ
                   </button>

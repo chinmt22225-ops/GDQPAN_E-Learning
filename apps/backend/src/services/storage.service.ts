@@ -17,8 +17,9 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const timestamp = Date.now();
-    const cleanName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, `${timestamp}_${cleanName}`);
+    const ext = path.extname(file.originalname) || '.mp4';
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${timestamp}_${base}${ext}`);
   },
 });
 
@@ -34,8 +35,12 @@ export const videoUploadMiddleware = multer({
       'video/ogg',
       'video/quicktime',
       'video/x-matroska',
+      'application/octet-stream',
     ];
-    if (allowedMimes.includes(file.mimetype) || file.originalname.match(/\.(mp4|webm|mov|mkv|m4v|m3u8)$/i)) {
+    const isVideoExt = file.originalname && /\.(mp4|webm|mov|mkv|m4v|m3u8|avi)$/i.test(file.originalname);
+    const isVideoMime = file.mimetype && (file.mimetype.startsWith('video/') || allowedMimes.includes(file.mimetype));
+
+    if (isVideoExt || isVideoMime) {
       cb(null, true);
     } else {
       cb(new Error('Chỉ chấp nhận các định dạng video hợp lệ (MP4, WebM, MOV, MKV).'));
@@ -147,5 +152,42 @@ export class StorageService {
         console.error('Không thể xóa file video cũ:', err);
       }
     }
+  }
+
+  /**
+   * Quét và trả về danh sách các file video có sẵn trên hệ thống (contest_videos & uploads)
+   */
+  static listAvailableVideos(): Array<{ filename: string; sizeMB: number; group: string }> {
+    const results: Array<{ filename: string; sizeMB: number; group: string }> = [];
+    const seen = new Set<string>();
+
+    const dirs = [
+      { path: path.resolve(process.cwd(), 'uploads', 'contest_videos'), group: 'Kho video GDQP&AN có sẵn' },
+      { path: path.resolve(process.cwd(), 'apps', 'backend', 'uploads', 'contest_videos'), group: 'Kho video GDQP&AN có sẵn' },
+      { path: UPLOAD_DIR, group: 'Video tải lên máy chủ' },
+    ];
+
+    for (const d of dirs) {
+      if (fs.existsSync(d.path)) {
+        try {
+          const files = fs.readdirSync(d.path);
+          for (const f of files) {
+            if (/\.(mp4|webm|mov|mkv|m4v)$/i.test(f) && !seen.has(f)) {
+              seen.add(f);
+              const stat = fs.statSync(path.join(d.path, f));
+              results.push({
+                filename: f,
+                sizeMB: Math.round((stat.size / (1024 * 1024)) * 10) / 10,
+                group: d.group,
+              });
+            }
+          }
+        } catch {
+          // ignore read error
+        }
+      }
+    }
+
+    return results.sort((a, b) => a.filename.localeCompare(b.filename, 'vi', { numeric: true }));
   }
 }

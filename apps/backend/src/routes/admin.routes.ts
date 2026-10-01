@@ -33,7 +33,24 @@ router.get('/courses/:courseId/lessons', AdminController.getLessonsByCourse);
 router.post('/courses/:courseId/lessons', AdminController.createLesson);
 router.put('/lessons/:lessonId', AdminController.updateLesson);
 router.delete('/lessons/:lessonId', AdminController.deleteLesson);
-router.post('/lessons/:lessonId/video', videoUploadMiddleware.single('video'), AdminController.uploadLessonVideo);
+router.get('/server-videos', AdminController.getServerVideos);
+router.post(
+  '/lessons/:lessonId/video',
+  (req, res, next) => {
+    videoUploadMiddleware.single('video')(req, res, (err: any) => {
+      if (err) {
+        console.error('Lỗi upload video multer:', err);
+        res.status(400).json({
+          success: false,
+          message: err.message || 'Lỗi khi tải file video lên máy chủ.',
+        });
+        return;
+      }
+      next();
+    });
+  },
+  AdminController.uploadLessonVideo
+);
 
 // Quản lý Ngân hàng Câu hỏi (Questions)
 router.get('/questions/template.xlsx', AdminController.getQuestionTemplate);

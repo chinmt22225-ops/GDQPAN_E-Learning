@@ -473,6 +473,15 @@ export class AdminController {
     });
   }
 
+  static async getServerVideos(_req: Request, res: Response): Promise<void> {
+    try {
+      const videos = StorageService.listAvailableVideos();
+      res.json({ success: true, data: videos });
+    } catch (err: unknown) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách video hệ thống.' });
+    }
+  }
+
   // ==========================================
   // NGÂN HÀNG CÂU HỎI (QUESTIONS)
   // ==========================================
