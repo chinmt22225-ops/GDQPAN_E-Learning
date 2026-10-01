@@ -4,6 +4,7 @@ import { Lesson } from '../models/Lesson.model.js';
 import { LessonProgress } from '../models/LessonProgress.model.js';
 import { VideoService } from '../services/video.service.js';
 import { QuizService } from '../services/quiz.service.js';
+import { StorageService } from '../services/storage.service.js';
 
 export class StudentController {
   static async getCourses(_req: Request, res: Response): Promise<void> {
@@ -36,6 +37,16 @@ export class StudentController {
     });
 
     res.json({ success: true, data: lessonsWithProgress });
+  }
+
+  static async getLessonStream(req: Request, res: Response): Promise<void> {
+    const lessonId = req.params.lessonId;
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy bài học.' });
+      return;
+    }
+    StorageService.streamVideo(req, res, lesson.videoKey || '');
   }
 
   static async heartbeat(req: Request, res: Response): Promise<void> {

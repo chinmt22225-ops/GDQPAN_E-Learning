@@ -1,6 +1,7 @@
 import { Lesson } from '../models/Lesson.model.js';
 import { LessonProgress } from '../models/LessonProgress.model.js';
 import { VideoHeartbeatInput } from '@elearning/shared';
+import { getRedisClient } from '../config/redis.js';
 
 export class VideoService {
   static async recordHeartbeat(
@@ -13,8 +14,8 @@ export class VideoService {
       throw new Error('Bài học không tồn tại.');
     }
 
-    const duration = lesson.videoDurationSeconds > 0 ? lesson.videoDurationSeconds : 900; // Mặc định 15p nếu chưa đặt
-    const totalBlocks = Math.max(1, Math.ceil(duration / 5)); // Chia khối 5 giây
+    const duration = lesson.videoDurationSeconds > 0 ? lesson.videoDurationSeconds : 900; // Mặc định 15p (900s) nếu chưa đặt
+    const totalBlocks = Math.max(1, Math.ceil(duration / 5)); // Chia khối 5 giây chuẩn ADR-08
 
     let progress = await LessonProgress.findOne({ userId, lessonId });
     if (!progress) {
@@ -28,11 +29,43 @@ export class VideoService {
       });
     }
 
-    if (input.playing && input.playbackRate <= 1.05) {
-      // Chỉ cộng block khi video đang phát và tốc độ không vượt quá 1x
+    // Kiểm tra tính hợp lệ qua Redis Session Cache
+    const redis = getRedisClient();
+    const redisKey = `heartbeat:${userId}:${lessonId}`;
+    let isValidPlayback = true;
+
+    try {
+      const prevDataStr = await redis.get(redisKey);
+      const now = Date.now();
+
+      if (prevDataStr) {
+        const prevData = JSON.parse(prevDataStr);
+        const wallClockDiffSec = (now - prevData.timestamp) / 1000;
+        const playerTimeDiffSec = input.currentTime - prevData.currentTime;
+
+        // Nếu thời gian phát trên player nhảy vọt quá nhanh so với thời gian thực tế
+        // (cho phép độ trễ mạng tối đa 3s và tua ngược thoải mái)
+        if (playerTimeDiffSec > wallClockDiffSec * 1.5 + 4) {
+          isValidPlayback = false;
+        }
+      }
+
+      // Lưu lại mốc heartbeat hiện tại vào Redis (hạn 120 giây)
+      await redis.set(
+        redisKey,
+        JSON.stringify({ currentTime: input.currentTime, timestamp: now }),
+        'EX',
+        120
+      );
+    } catch {
+      // Nếu Redis tạm thời không phản hồi, vẫn cho phép tiếp tục chạy qua MongoDB
+    }
+
+    // Chỉ tích lũy block khi video đang phát thực sự, tốc độ <= 1.05x và không gian lận tua nhanh
+    if (input.playing && input.playbackRate <= 1.05 && isValidPlayback) {
       const currentSecond = Math.max(0, input.currentTime);
-      const startSecond = Math.max(0, currentSecond - 16); // Khoảng thời gian heartbeat vừa qua (~15s)
-      
+      const startSecond = Math.max(0, currentSecond - 16); // Khoảng 15s vừa trôi qua giữa 2 lần heartbeat
+
       const startBlock = Math.floor(startSecond / 5);
       const endBlock = Math.min(totalBlocks - 1, Math.floor(currentSecond / 5));
 
@@ -44,8 +77,8 @@ export class VideoService {
       progress.coveredBlocks = Array.from(existingSet);
       progress.coveragePercent = Math.min(1.0, progress.coveredBlocks.length / totalBlocks);
 
-      // Kiểm tra đạt điều kiện xem video
-      if (progress.coveragePercent >= lesson.minCoveragePercent) {
+      // Kiểm tra đạt điều kiện tối thiểu xem video (mặc định >= 95% theo ADR-08)
+      if (progress.coveragePercent >= (lesson.minCoveragePercent || 0.95)) {
         progress.videoCompleted = true;
         if (progress.status === 'NOT_STARTED' || progress.status === 'WATCHING') {
           progress.status = 'QUIZ_UNLOCKED';

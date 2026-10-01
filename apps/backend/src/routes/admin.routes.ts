@@ -2,6 +2,7 @@ import { Router } from 'express';
 import express from 'express';
 import { AdminController } from '../controllers/admin.controller.js';
 import { requireAdmin } from '../middleware/auth.middleware.js';
+import { videoUploadMiddleware } from '../services/storage.service.js';
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.get('/courses/:courseId/lessons', AdminController.getLessonsByCourse);
 router.post('/courses/:courseId/lessons', AdminController.createLesson);
 router.put('/lessons/:lessonId', AdminController.updateLesson);
 router.delete('/lessons/:lessonId', AdminController.deleteLesson);
+router.post('/lessons/:lessonId/video', videoUploadMiddleware.single('video'), AdminController.uploadLessonVideo);
 
 // Quản lý Ngân hàng Câu hỏi (Questions)
 router.get('/lessons/:lessonId/questions', AdminController.getQuestionsByLesson);

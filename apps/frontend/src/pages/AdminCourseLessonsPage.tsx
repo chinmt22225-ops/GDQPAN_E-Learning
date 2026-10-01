@@ -18,6 +18,8 @@ import {
   X,
   Save,
   Check,
+  UploadCloud,
+  Film,
 } from 'lucide-react';
 
 interface LessonAdminItem {
@@ -103,6 +105,16 @@ export const AdminCourseLessonsPage: React.FC = () => {
   });
   const [savingQuestion, setSavingQuestion] = useState<boolean>(false);
   const [questionFormError, setQuestionFormError] = useState<string | null>(null);
+
+  // Video Upload & Management Modal State
+  const [videoModalLesson, setVideoModalLesson] = useState<LessonAdminItem | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoUrlInput, setVideoUrlInput] = useState<string>('');
+  const [videoDurationInput, setVideoDurationInput] = useState<number>(15);
+  const [videoUploading, setVideoUploading] = useState<boolean>(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+  const [videoTab, setVideoTab] = useState<'upload' | 'url'>('upload');
+  const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== 'admin')) {
@@ -247,6 +259,111 @@ export const AdminCourseLessonsPage: React.FC = () => {
       alert((err as Error).message || 'Lỗi khi xóa bài học.');
     } finally {
       setDeletingLessonLoading(false);
+    }
+  };
+
+  // ============================================
+  // VIDEO MANAGEMENT HANDLERS (PHASE 2)
+  // ============================================
+
+  const handleOpenVideoModal = (lesson: LessonAdminItem) => {
+    setVideoModalLesson(lesson);
+    setVideoFile(null);
+    setVideoUrlInput(lesson.videoKey || '');
+    setVideoDurationInput(Math.round(lesson.videoDurationSeconds / 60) || 15);
+    setVideoUploadProgress(0);
+    setVideoUploading(false);
+    setVideoUploadError(null);
+    setVideoTab(
+      lesson.videoKey &&
+        (lesson.videoKey.startsWith('http://') || lesson.videoKey.startsWith('https://'))
+        ? 'url'
+        : 'upload'
+    );
+  };
+
+  const handleUploadVideoFile = () => {
+    if (!videoModalLesson || !videoFile) {
+      setVideoUploadError('Vui lòng chọn file video (.mp4, .webm, .mov) cần tải lên.');
+      return;
+    }
+
+    setVideoUploading(true);
+    setVideoUploadProgress(0);
+    setVideoUploadError(null);
+
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    formData.append('videoDurationMinutes', String(videoDurationInput || 15));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/admin/lessons/${videoModalLesson._id}/video`);
+    xhr.withCredentials = true;
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        setVideoUploadProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      setVideoUploading(false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        alert('Tải lên video bài giảng thành công!');
+        setVideoModalLesson(null);
+        setVideoFile(null);
+        fetchLessons();
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText);
+          setVideoUploadError(err.message || 'Lỗi khi tải video lên máy chủ.');
+        } catch {
+          setVideoUploadError('Lỗi khi tải video lên máy chủ.');
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      setVideoUploading(false);
+      setVideoUploadError('Lỗi kết nối mạng trong quá trình upload video.');
+    };
+
+    xhr.send(formData);
+  };
+
+  const handleSaveVideoUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoModalLesson) return;
+
+    if (!videoUrlInput.trim()) {
+      setVideoUploadError('Vui lòng nhập đường dẫn Cloudflare R2 / CDN hoặc link video.');
+      return;
+    }
+
+    setVideoUploading(true);
+    setVideoUploadError(null);
+
+    try {
+      const res = await apiRequest(`/api/admin/lessons/${videoModalLesson._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          videoKey: videoUrlInput.trim(),
+          videoDurationSeconds: Number(videoDurationInput || 15) * 60,
+        }),
+      });
+
+      if (res.success) {
+        alert('Đã cập nhật link video bài giảng thành công!');
+        setVideoModalLesson(null);
+        fetchLessons();
+      } else {
+        setVideoUploadError(res.message || 'Không thể lưu đường dẫn video.');
+      }
+    } catch (err: unknown) {
+      setVideoUploadError((err as Error).message || 'Đã xảy ra lỗi.');
+    } finally {
+      setVideoUploading(false);
     }
   };
 
@@ -662,6 +779,19 @@ export const AdminCourseLessonsPage: React.FC = () => {
                     {!hasEnoughQuestions && (
                       <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                     )}
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenVideoModal(lesson)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      lesson.videoKey
+                        ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
+                    }`}
+                    title="Tải lên video hoặc cấu hình link Cloudflare R2 / CDN"
+                  >
+                    <UploadCloud className="w-4 h-4 text-blue-600" />
+                    <span>{lesson.videoKey ? 'Đổi Video' : 'Tải Video'}</span>
                   </button>
 
                   <div className="flex items-center gap-1">
@@ -1191,6 +1321,235 @@ export const AdminCourseLessonsPage: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL TẢI LÊN & QUẢN LÝ VIDEO BÀI GIẢNG (PHASE 2) */}
+      {/* ========================================================================= */}
+      {videoModalLesson && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-5">
+              <div>
+                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                  Quản lý Video Bài Giảng
+                </span>
+                <h3 className="text-lg font-bold text-slate-900 line-clamp-1">
+                  {videoModalLesson.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setVideoModalLesson(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {videoUploadError && (
+              <div className="p-3 mb-4 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+                {videoUploadError}
+              </div>
+            )}
+
+            {/* Video Hiện Tại & Xem Trước */}
+            {videoModalLesson.videoKey && (
+              <div className="mb-6 bg-slate-900 rounded-2xl p-4 border border-slate-800 text-white space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-semibold flex items-center gap-1.5 text-slate-200">
+                    <Film className="w-4 h-4 text-blue-400" />
+                    Video đang sử dụng:
+                  </span>
+                  <span className="font-mono text-[11px] truncate max-w-xs text-blue-300">
+                    {videoModalLesson.videoKey}
+                  </span>
+                </div>
+                <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                  <video
+                    src={
+                      videoModalLesson.videoKey.startsWith('http://') ||
+                      videoModalLesson.videoKey.startsWith('https://')
+                        ? videoModalLesson.videoKey
+                        : `/api/student/lessons/${videoModalLesson._id}/stream`
+                    }
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Chuyển đổi tab: Tải file lên VS Dán link Cloudflare R2 */}
+            <div className="flex border-b border-slate-200 mb-5">
+              <button
+                type="button"
+                onClick={() => setVideoTab('upload')}
+                className={`flex-1 py-2.5 text-xs sm:text-sm font-bold text-center border-b-2 transition-colors cursor-pointer ${
+                  videoTab === 'upload'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Tải file trực tiếp lên Server (Tối đa 500MB)
+              </button>
+              <button
+                type="button"
+                onClick={() => setVideoTab('url')}
+                className={`flex-1 py-2.5 text-xs sm:text-sm font-bold text-center border-b-2 transition-colors cursor-pointer ${
+                  videoTab === 'url'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Dùng Link Cloudflare R2 / S3 / HLS (.m3u8)
+              </button>
+            </div>
+
+            {/* Tab 1: Upload File */}
+            {videoTab === 'upload' ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center transition-colors bg-slate-50/50">
+                  <UploadCloud className="w-10 h-10 text-blue-600 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-800 mb-1">
+                    Chọn video bài giảng từ máy tính của bạn
+                  </p>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Hỗ trợ định dạng MP4, WebM, MOV, MKV (Tối đa 500MB)
+                  </p>
+
+                  <input
+                    type="file"
+                    id="videoFileInput"
+                    accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setVideoFile(e.target.files[0]);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="videoFileInput"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                  >
+                    <span>Duyệt chọn file video</span>
+                  </label>
+
+                  {videoFile && (
+                    <div className="mt-3 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span>{videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Thời lượng video ước tính (phút)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={videoDurationInput}
+                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
+                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Hệ thống sẽ dựa vào thời lượng này để tính tỷ lệ xem hoàn thành (≥ 95%) cho sinh viên.
+                  </span>
+                </div>
+
+                {/* Progress Bar khi đang upload */}
+                {videoUploading && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                      <span>Đang tải video lên máy chủ...</span>
+                      <span>{videoUploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-blue-600 h-full transition-all duration-200"
+                        style={{ width: `${videoUploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setVideoModalLesson(null)}
+                    disabled={videoUploading}
+                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUploadVideoFile}
+                    disabled={videoUploading || !videoFile}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>{videoUploading ? `Đang tải (${videoUploadProgress}%)...` : 'Tải lên ngay'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Tab 2: URL R2 / S3 / HLS */
+              <form onSubmit={handleSaveVideoUrl} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Đường dẫn Video URL / Cloudflare R2 / S3 *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={videoUrlInput}
+                    onChange={(e) => setVideoUrlInput(e.target.value)}
+                    placeholder="https://pub-xxxx.r2.dev/video-bai-1.m3u8 hoặc .mp4"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    Hỗ trợ đường dẫn Cloudflare R2 (0đ egress), AWS S3 CDN, hoặc luồng phát HLS (.m3u8).
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Thời lượng video (phút)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={videoDurationInput}
+                    onChange={(e) => setVideoDurationInput(Number(e.target.value))}
+                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setVideoModalLesson(null)}
+                    disabled={videoUploading}
+                    className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={videoUploading}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{videoUploading ? 'Đang lưu...' : 'Lưu liên kết video'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

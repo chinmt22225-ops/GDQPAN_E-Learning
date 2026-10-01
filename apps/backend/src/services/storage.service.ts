@@ -1,0 +1,131 @@
+import fs from 'fs';
+import path from 'path';
+import { Request, Response } from 'express';
+import multer from 'multer';
+
+const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'videos');
+
+// Đảm bảo thư mục lưu trữ video tồn tại
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Cấu hình Multer để upload video
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const timestamp = Date.now();
+    const cleanName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${timestamp}_${cleanName}`);
+  },
+});
+
+export const videoUploadMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: 500 * 1024 * 1024, // Tối đa 500MB cho mỗi video bài giảng
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedMimes = [
+      'video/mp4',
+      'video/webm',
+      'video/ogg',
+      'video/quicktime',
+      'video/x-matroska',
+    ];
+    if (allowedMimes.includes(file.mimetype) || file.originalname.match(/\.(mp4|webm|mov|mkv|m4v|m3u8)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận các định dạng video hợp lệ (MP4, WebM, MOV, MKV).'));
+    }
+  },
+});
+
+export class StorageService {
+  /**
+   * Phát video với cơ chế HTTP 206 Partial Content (Range Requests)
+   * Giúp trình duyệt load video từng đoạn, phát mượt và hỗ trợ chống tua lướt
+   */
+  static streamVideo(req: Request, res: Response, videoKey: string): void {
+    if (!videoKey) {
+      // Fallback về video mẫu Google Storage nếu bài học chưa được nạp video
+      res.redirect('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+      return;
+    }
+
+    // Nếu videoKey là một đường dẫn CDN / Cloudflare R2 / URL tuyệt đối
+    if (videoKey.startsWith('http://') || videoKey.startsWith('https://')) {
+      res.redirect(videoKey);
+      return;
+    }
+
+    const filePath = path.join(UPLOAD_DIR, videoKey);
+
+    if (!fs.existsSync(filePath)) {
+      // Nếu file local không tìm thấy, fallback sang video mẫu demo
+      res.redirect('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    // Xác định mime type
+    let contentType = 'video/mp4';
+    if (videoKey.endsWith('.webm')) contentType = 'video/webm';
+    else if (videoKey.endsWith('.mov')) contentType = 'video/quicktime';
+    else if (videoKey.endsWith('.m3u8')) contentType = 'application/vnd.apple.mpegurl';
+
+    if (range) {
+      // Xử lý Range Request (Ví dụ: "bytes=0-1048576")
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).send('Requested range not satisfiable');
+        return;
+      }
+
+      const chunkSize = end - start + 1;
+      const fileStream = fs.createReadStream(filePath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      });
+
+      fileStream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      });
+
+      fs.createReadStream(filePath).pipe(res);
+    }
+  }
+
+  /**
+   * Xóa file video local nếu bài học bị xóa hoặc thay thế video mới
+   */
+  static deleteLocalVideo(videoKey: string): void {
+    if (!videoKey || videoKey.startsWith('http://') || videoKey.startsWith('https://')) return;
+    const filePath = path.join(UPLOAD_DIR, videoKey);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error('Không thể xóa file video cũ:', err);
+      }
+    }
+  }
+}

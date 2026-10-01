@@ -8,6 +8,7 @@ import { Lesson } from '../models/Lesson.model.js';
 import { Question } from '../models/Question.model.js';
 import { ExcelService } from '../services/excel.service.js';
 import { sseService } from './../services/sse.service.js';
+import { StorageService } from '../services/storage.service.js';
 
 export class AdminController {
   static async getDashboardStats(_req: Request, res: Response): Promise<void> {
@@ -392,6 +393,43 @@ export class AdminController {
     res.json({
       success: true,
       message: `Đã xóa bài học ${lesson.title} và toàn bộ câu hỏi liên quan.`,
+    });
+  }
+
+  static async uploadLessonVideo(req: Request, res: Response): Promise<void> {
+    const { lessonId } = req.params;
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) {
+      res.status(404).json({ success: false, message: 'Không tìm thấy bài học.' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'Vui lòng đính kèm file video hợp lệ.' });
+      return;
+    }
+
+    // Xóa video cũ nếu có và là file local
+    if (lesson.videoKey) {
+      StorageService.deleteLocalVideo(lesson.videoKey);
+    }
+
+    lesson.videoKey = req.file.filename;
+
+    // Nếu admin gửi kèm thời lượng video (phút)
+    if (req.body.videoDurationMinutes) {
+      lesson.videoDurationSeconds = Math.max(1, Number(req.body.videoDurationMinutes) * 60);
+    }
+
+    await lesson.save();
+
+    res.json({
+      success: true,
+      message: 'Tải lên video bài giảng thành công.',
+      data: {
+        videoKey: lesson.videoKey,
+        videoDurationSeconds: lesson.videoDurationSeconds,
+      },
     });
   }
 
